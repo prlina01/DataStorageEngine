@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/edsrzf/mmap-go"
 	"hash/crc32"
 	"io"
 	"io/ioutil"
@@ -28,15 +27,7 @@ import (
    Timestamp = Timestamp of the operation in seconds
 */
 
-const (
-	T_SIZE = 8
-	C_SIZE = 4
 
-	CRC_SIZE       = T_SIZE + C_SIZE
-	TOMBSTONE_SIZE = CRC_SIZE + 1
-	KEY_SIZE       = TOMBSTONE_SIZE + T_SIZE
-	VALUE_SIZE     = KEY_SIZE + T_SIZE
-)
 
 type Line struct{
 	crc uint32
@@ -56,12 +47,20 @@ type WriteAheadLog struct{
 }
 
 func (wal *WriteAheadLog) init(segment int64){
-	wal.segment = segment;
+	wal.segment = segment
 	f,err := os.Open("wal")
 	if err != nil{
-		os.Create("wal")
+		_, err := os.Create("wal")
+		if err != nil {
+			return
+		}
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+
+		}
+	}(f)
 
 	_,err = f.Readdirnames(1)
 	if err == io.EOF{
@@ -71,7 +70,10 @@ func (wal *WriteAheadLog) init(segment int64){
 		}
 		wal.file = "wal/wal-0001.log"
 		wal.segLoc = append(wal.segLoc,1)
-		file.Close()
+		err = file.Close()
+		if err != nil {
+			return
+		}
 		return
 	}
 	wal.read()
@@ -93,7 +95,7 @@ func (wal *WriteAheadLog) read(){
 	pad := fmt.Sprintf("%04d",lastindex)
 	filename := "wal/wal-"+pad+".log"
 	wal.file = filename
-	wal.readSegment(lastindex)
+	wal.data = wal.readSegment(lastindex)
 
 }
 
@@ -101,10 +103,16 @@ func (wal *WriteAheadLog) readSegment(segment int) []Line {
 	pad := fmt.Sprintf("%04d",segment)
 	filename := "wal/wal-"+pad+".log"
 	f, err := os.Open(filename)
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+
+		}
+	}(f)
 	if err!=nil {
 		panic("err")
 	}
-	var data []Line;
+	var data []Line
 	crc := make([]byte,4)
 	timestamp := make([]byte,8)
 	tombstone := make([]byte,1)
@@ -141,10 +149,47 @@ func (wal *WriteAheadLog) readSegment(segment int) []Line {
 	return data
 }
 
+func (wal *WriteAheadLog) lowWaterMarkRemoval(LWM int){
+	files, err := ioutil.ReadDir("wal/")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if LWM == -1{
+		return
+	}
+	if LWM == 0{
+		todelete := wal.segLoc
+		for elem := range todelete {
+			pad := fmt.Sprintf("%04d", todelete[elem])
+			filename := "wal/wal-" + pad + ".log"
+			err := os.Remove(filename)
+			if err != nil {
+			}
+		}
+		wal.segLoc = nil
+		wal.data = nil
+		return
+	}
+	if LWM >= len(files){
+		return
+	}
+	todelete := wal.segLoc[:len(wal.segLoc)-LWM]
+	toremain := wal.segLoc[len(wal.segLoc)-LWM:]
+	for elem := range todelete {
+		pad := fmt.Sprintf("%04d", todelete[elem])
+		filename := "wal/wal-" + pad + ".log"
+		err := os.Remove(filename)
+		if err != nil {
+			return
+		}
+		wal.segLoc = toremain
+	}
+}
+
 func (wal *WriteAheadLog) addKV(key string,value []byte){
-	if int64(len(wal.data)) > wal.segment{
-		files,_ := ioutil.ReadDir("wal/")
-		i := len(files)+1
+	if int64(len(wal.data)) >= wal.segment{
+		i := wal.segLoc[len(wal.segLoc)-1]+1
 		wal.segLoc = append(wal.segLoc,i)
 		pad := fmt.Sprintf("%04d",i)
 		filename := "wal/wal-"+pad+".log"
@@ -153,10 +198,19 @@ func (wal *WriteAheadLog) addKV(key string,value []byte){
 			panic("File already exists")
 		}
 		wal.data = nil
-		wal.file = filename;
-		file.Close()
+		wal.file = filename
+		err = file.Close()
+		if err != nil {
+			return
+		}
 	}
 	myfile,err := os.OpenFile(wal.file,os.O_APPEND,0777)
+	defer func(myfile *os.File) {
+		err := myfile.Close()
+		if err != nil {
+
+		}
+	}(myfile)
 	if err!=nil{
 		panic("err")
 	}
@@ -164,7 +218,7 @@ func (wal *WriteAheadLog) addKV(key string,value []byte){
 	for i:=0;i< len(value);i++{
 	mybytes = append(mybytes,value[i])
 	}
-	var allbytes []byte;
+	var allbytes []byte
 	chcks := CRC32(mybytes)
 	chcksbytes := make([]byte,4)
 	binary.LittleEndian.PutUint32(chcksbytes,chcks)
@@ -195,7 +249,10 @@ func (wal *WriteAheadLog) addKV(key string,value []byte){
 	allbytes = append(allbytes, value...)
 	line := Line{chcks, uint64(fulltimestamp),tombstone,keysize,valuesize,key,value}
 	wal.data = append(wal.data, line)
-	myfile.Write(allbytes)
+	_, err = myfile.Write(allbytes)
+	if err != nil {
+		return
+	}
 
 
 }
@@ -205,31 +262,6 @@ func CRC32(data []byte) uint32 {
 	return crc32.ChecksumIEEE(data)
 }
 
-func appendWal(file *os.File, data []byte) error {
-	currentLen, err := fileLen(file)
-	if err != nil {
-		return err
-	}
-	err = file.Truncate(currentLen + int64(len(data)))
-	if err != nil {
-		return err
-	}
-	mmapf, err := mmap.Map(file, mmap.RDWR, 0)
-	if err != nil {
-		return err
-	}
-	copy(mmapf[currentLen:], data)
-	mmapf.Flush()
-	mmapf.Unmap()
-	return nil
-}
-func fileLen(file *os.File) (int64, error) {
-	info, err := file.Stat()
-	if err != nil {
-		return 0, err
-	}
-	return info.Size(), nil
-}
 
 func main() {
 	wal := WriteAheadLog{}
@@ -248,7 +280,8 @@ func main() {
 	wal.addKV("dog",make([]byte,5))
 	wal.addKV("dog",make([]byte,5))
 	wal.addKV("dog",make([]byte,5))
-	fmt.Println(wal.readSegment(4))
+	wal.lowWaterMarkRemoval(1)
+
 
 
 
