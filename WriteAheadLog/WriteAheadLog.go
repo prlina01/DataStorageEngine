@@ -39,12 +39,51 @@ type Line struct{
 	Value     []byte
 }
 
+
 type WriteAheadLog struct{
 	file   string
 	Data   []Line
 	segLoc []int
 	segment int64
 	LWM int
+}
+
+func SerializeLine(line Line) []byte {
+	var allbytes []byte
+	mybytes := []byte(line.Key)
+	for i:=0;i< len(line.Value);i++{
+		mybytes = append(mybytes,line.Value[i])
+	}
+	chcks := CRC32(mybytes)
+	chcksbytes := make([]byte,4)
+	binary.LittleEndian.PutUint32(chcksbytes,chcks)
+
+	t:= time.Now().Unix()
+	fulltimestamp := uint(t)
+	fulltimestampbytes := make([]byte,8)
+	binary.LittleEndian.PutUint64(fulltimestampbytes, uint64(fulltimestamp))
+
+	tombstone := byte(0)
+
+	keysize := uint64(len(line.Key))
+	keysizebytes:= make([]byte,8)
+	binary.LittleEndian.PutUint64(keysizebytes,keysize)
+
+	valuesize := uint64(len(line.Value))
+	valuesizebytes := make([]byte,8)
+	binary.LittleEndian.PutUint64(valuesizebytes,valuesize)
+
+	keybytes := []byte(line.Key)
+
+	allbytes = append(allbytes, chcksbytes...)
+	allbytes = append(allbytes, fulltimestampbytes...)
+	allbytes = append(allbytes, tombstone)
+	allbytes = append(allbytes, keysizebytes...)
+	allbytes = append(allbytes, valuesizebytes...)
+	allbytes = append(allbytes, keybytes...)
+	allbytes = append(allbytes, line.Value...)
+
+	return allbytes
 }
 
 func (wal *WriteAheadLog) Init(segment int64){
