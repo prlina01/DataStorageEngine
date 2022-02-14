@@ -2,6 +2,7 @@ package Sstable
 
 import (
 	"awesomeProject5/BloomFilter"
+	"awesomeProject5/MerkleTree"
 	"awesomeProject5/WriteAheadLog"
 	"encoding/binary"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Location struct{
@@ -57,43 +57,6 @@ func serializeBloom(filter BloomFilter.BloomFilter)[]byte{
 	return allbytes
 }
 
-func serialize(line WriteAheadLog.Line) []byte {
-	var allbytes []byte
-	mybytes := []byte(line.Key)
-	for i:=0;i< len(line.Value);i++{
-		mybytes = append(mybytes,line.Value[i])
-	}
-	chcks := WriteAheadLog.CRC32(mybytes)
-	chcksbytes := make([]byte,4)
-	binary.LittleEndian.PutUint32(chcksbytes,chcks)
-
-	t:= time.Now().Unix()
-	fulltimestamp := uint(t)
-	fulltimestampbytes := make([]byte,8)
-	binary.LittleEndian.PutUint64(fulltimestampbytes, uint64(fulltimestamp))
-
-	tombstone := byte(0)
-
-	keysize := uint64(len(line.Key))
-	keysizebytes:= make([]byte,8)
-	binary.LittleEndian.PutUint64(keysizebytes,keysize)
-
-	valuesize := uint64(len(line.Value))
-	valuesizebytes := make([]byte,8)
-	binary.LittleEndian.PutUint64(valuesizebytes,valuesize)
-
-	keybytes := []byte(line.Key)
-
-	allbytes = append(allbytes, chcksbytes...)
-	allbytes = append(allbytes, fulltimestampbytes...)
-	allbytes = append(allbytes, tombstone)
-	allbytes = append(allbytes, keysizebytes...)
-	allbytes = append(allbytes, valuesizebytes...)
-	allbytes = append(allbytes, keybytes...)
-	allbytes = append(allbytes, line.Value...)
-
-	return allbytes
-}
 
 func (sst *Sstable) Init(data []WriteAheadLog.Line){
 	sst.Data = data
@@ -145,10 +108,12 @@ func (sst *Sstable) WriteData(segment int){
 	filename1 := "Data/Index-"+pad+".bin"
 	filename2 := "Data/Summary-"+pad+".bin"
 	filename3 := "Data/BloomFilter-"+pad+".bin"
+	filename4 := "Data/Metadata-"+pad+".txt"
 	_, _ = os.Create(filename)
 	_, _ = os.Create(filename1)
 	_, _ = os.Create(filename2)
 	_, _ = os.Create(filename3)
+	_, _ = os.Create(filename4)
 	var bloombytes []byte
 	var sstablebytes []byte
 	var indexbytes []byte
@@ -160,7 +125,7 @@ func (sst *Sstable) WriteData(segment int){
 		dline := sst.Data[line]
 		currentks := dline.Keysize
 		currentvs := dline.Valuesize
-		sstablebytes = append(sstablebytes,serialize(dline)...)
+		sstablebytes = append(sstablebytes,WriteAheadLog.SerializeLine(dline)...)
 		loc = Location{dline.Key, len(sstablebytes)-int(currentks)-int(currentvs),len(dline.Key)}
 		sst.Index = append(sst.Index, loc)
 		indexbytes = append(indexbytes,serializeindex(loc)...)
@@ -212,6 +177,9 @@ func (sst *Sstable) WriteData(segment int){
 	if err != nil{
 		return
 	}
+	mt := MerkleTree.MerkleTree{}
+	mt.BuildMT(MerkleTree.CreateNodes(sst.Data))
+	mt.WriteTree(filename4)
 
 }
 
