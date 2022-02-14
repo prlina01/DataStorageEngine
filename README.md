@@ -4,3 +4,4 @@ Implementation of segmented WriteAheadLog with low watermark removal
 *Key-Value addition
 *Low watermark removal
 *Individual segment reading
+
