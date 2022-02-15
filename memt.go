@@ -1,6 +1,7 @@
 package main
 
 import (
+	"awesomeProject5/Cache"
 	"awesomeProject5/SkipList"
 	"awesomeProject5/Sstable"
 	"awesomeProject5/WriteAheadLog"
@@ -14,12 +15,14 @@ type Config struct {
 	WalSize uint64  	`yaml:"wal_size"`
 	MemtableSize uint64	`yaml:"memtable_size"`
 	LowWaterMark uint8  `yaml:"low_water_mark"`
+	CacheSize int 		`yaml:"cache_size"`
 }
 type MemTable struct{
 	size uint64
 	data *SkipList.SkipList
 	wal *WriteAheadLog.WriteAheadLog
 }
+
 func (memtable* MemTable) Init(){
 	data := memtable.wal.Data
 	if len(data) >= int(memtable.size){
@@ -90,8 +93,8 @@ func main() {
 		values[i] = make([]byte, 10)
 	}
 
-
-
+	cache := Cache.Cache{MaxSize: config.CacheSize}
+	cache.Init()
 	wal := WriteAheadLog.WriteAheadLog{}
 	wal.Init(int64(config.WalSize))
 	wal.LWM = int(config.LowWaterMark)
@@ -100,8 +103,14 @@ func main() {
 	mt.Init()
 
 	for i:= range keys{
+		cache.AddKV(keys[i],values[i])
 		mt.Insert(keys[i],values[i])
 	}
+	fmt.Println(cache.FindKey("xv"))
+	fmt.Println(cache.FindKey("sdds"))
+	cache.RemoveKey("gasdg")
+	fmt.Println(cache.FindKey("sdds"))
+	cache.PrintAll()
 
 
 
