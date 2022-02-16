@@ -1,7 +1,7 @@
 package SkipList
 
 import (
-	"awesomeProject5/Application/WriteAheadLog"
+	"KeyDataStorage/Application/WriteAheadLog"
 	"fmt"
 	"math/rand"
 	"time"

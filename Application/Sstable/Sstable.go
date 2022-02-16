@@ -1,9 +1,9 @@
 package Sstable
 
 import (
-	"awesomeProject5/Application/BloomFilter"
-	"awesomeProject5/Application/MerkleTree"
-	"awesomeProject5/Application/WriteAheadLog"
+	"KeyDataStorage/Application/BloomFilter"
+	"KeyDataStorage/Application/MerkleTree"
+	"KeyDataStorage/Application/WriteAheadLog"
 	"encoding/binary"
 	"fmt"
 	"io"

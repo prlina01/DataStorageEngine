@@ -1,4 +1,4 @@
-module awesomeProject5
+module KeyDataStorage
 
 go 1.17
 

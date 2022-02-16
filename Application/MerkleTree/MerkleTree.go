@@ -1,7 +1,7 @@
 package MerkleTree
 
 import (
-	"awesomeProject5/Application/WriteAheadLog"
+	"KeyDataStorage/Application/WriteAheadLog"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"

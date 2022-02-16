@@ -1,10 +1,10 @@
 package main
 
 import (
-	"awesomeProject5/Application/Cache"
-	"awesomeProject5/Application/Memtable"
-	"awesomeProject5/Application/SkipList"
-	"awesomeProject5/Application/WriteAheadLog"
+	"KeyDataStorage/Application/Cache"
+	"KeyDataStorage/Application/Memtable"
+	"KeyDataStorage/Application/SkipList"
+	"KeyDataStorage/Application/WriteAheadLog"
 	"fmt"
 	yaml "gopkg.in/yaml.v2"
 	"io/ioutil"

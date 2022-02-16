@@ -1,9 +1,9 @@
 package Memtable
 
 import (
-	"awesomeProject5/Application/SkipList"
-	"awesomeProject5/Application/Sstable"
-	"awesomeProject5/Application/WriteAheadLog"
+	"KeyDataStorage/Application/SkipList"
+	"KeyDataStorage/Application/Sstable"
+	"KeyDataStorage/Application/WriteAheadLog"
 )
 
 type MemTable struct {
