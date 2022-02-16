@@ -103,16 +103,25 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line) {
 
 func (sst *Sstable) WriteData(segment int) {
 	pad := fmt.Sprintf("%04d", segment)
-	filename := "Data/Sstable-" + pad + ".bin"
-	filename1 := "Data/Index-" + pad + ".bin"
-	filename2 := "Data/Summary-" + pad + ".bin"
-	filename3 := "Data/BloomFilter-" + pad + ".bin"
+	filename := "Data/Sstable-" + pad + ".db"
+	filename1 := "Data/Index-" + pad + ".db"
+	filename2 := "Data/Summary-" + pad + ".db"
+	filename3 := "Data/BloomFilter-" + pad + ".db"
 	filename4 := "Data/Metadata-" + pad + ".txt"
+	filename5 := "Data/TOC-" + pad + ".db"
 	_, _ = os.Create(filename)
 	_, _ = os.Create(filename1)
 	_, _ = os.Create(filename2)
 	_, _ = os.Create(filename3)
 	_, _ = os.Create(filename4)
+	_, _ = os.Create(filename5)
+	var stringss []string
+	stringss = append(stringss,strings.Split(filename,"Data/")[1]+"\n")
+	stringss = append(stringss,strings.Split(filename1,"Data/")[1]+"\n")
+	stringss = append(stringss,strings.Split(filename2,"Data/")[1]+"\n")
+	stringss = append(stringss,strings.Split(filename3,"Data/")[1]+"\n")
+	stringss = append(stringss,strings.Split(filename4,"Data/")[1]+"\n")
+	stringss = append(stringss,strings.Split(filename5,"Data/")[1])
 	var bloombytes []byte
 	var sstablebytes []byte
 	var indexbytes []byte
@@ -138,6 +147,7 @@ func (sst *Sstable) WriteData(segment int) {
 	file1, _ := os.OpenFile(filename1, os.O_APPEND, 0777)
 	file2, _ := os.OpenFile(filename2, os.O_APPEND, 0777)
 	file3, _ := os.OpenFile(filename3, os.O_APPEND, 0777)
+	file5, _ := os.OpenFile(filename5, os.O_APPEND, 0777)
 	defer func(file *os.File) {
 		err := file.Close()
 		if err != nil {
@@ -181,5 +191,12 @@ func (sst *Sstable) WriteData(segment int) {
 	mt := MerkleTree.MerkleTree{}
 	mt.BuildMT(MerkleTree.CreateNodes(sst.Data))
 	mt.WriteTree(filename4)
+	for line:=range(stringss){
+		_, err := file5.WriteString(stringss[line])
+		if err != nil {
+			return 
+		}
+	}
+
 
 }
