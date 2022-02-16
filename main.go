@@ -6,16 +6,16 @@ import (
 	"awesomeProject5/Application/SkipList"
 	"awesomeProject5/Application/WriteAheadLog"
 	"fmt"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 )
 
 type Config struct {
-	WalSize uint64  	`yaml:"wal_size"`
-	MemtableSize uint64	`yaml:"memtable_size"`
+	WalSize      uint64 `yaml:"wal_size"`
+	MemtableSize uint64 `yaml:"memtable_size"`
 	LowWaterMark uint8  `yaml:"low_water_mark"`
-	CacheSize int 		`yaml:"cache_size"`
+	CacheSize    int    `yaml:"cache_size"`
 }
 
 func main() {
@@ -41,7 +41,7 @@ func main() {
 	keys = append(keys, "dg")
 	keys = append(keys, "gasdg")
 	keys = append(keys, "daszx")
-	keys = append(keys, "sdds")
+	keys = append(keys, "daszx1")
 
 	values := make([][]byte, 10)
 	for i := range values {
@@ -57,18 +57,14 @@ func main() {
 	mt := Memtable.MemTable{config.MemtableSize, SkipList.New(20, 0, 0, nil), &wal}
 	mt.Init()
 
-	for i:= range keys{
-		cache.AddKV(keys[i],values[i])
-		mt.Insert(keys[i],values[i])
+	for i := range keys {
+		cache.AddKV(keys[i], values[i])
+		mt.Insert(keys[i], values[i])
 	}
 	fmt.Println(cache.FindKey("xv"))
 	fmt.Println(cache.FindKey("sdds"))
 	cache.RemoveKey("gasdg")
 	fmt.Println(cache.FindKey("sdds"))
 	cache.PrintAll()
-
-
-
-
 
 }
