@@ -14,6 +14,12 @@ import (
 	"strings"
 )
 
+type Summary struct{
+	first Location
+	last Location
+	index []Location
+}
+
 type Location struct {
 	key       string
 	value     int
@@ -21,7 +27,7 @@ type Location struct {
 }
 
 type Sstable struct {
-	Summary     []Location
+	Summary     Summary
 	Index       []Location
 	Data        []WriteAheadLog.Line
 	BloomFilter BloomFilter.BloomFilter
@@ -126,8 +132,11 @@ func (sst *Sstable) WriteData(segment int) {
 	var sstablebytes []byte
 	var indexbytes []byte
 	var summarybytes []byte
-	var loc Location
+	var firstlast []byte
+ 	var loc Location
 	var summaryloc Location
+	var first Location
+	var last Location
 	bloombytes = serializeBloom(sst.BloomFilter)
 	for line := range sst.Data {
 		dline := sst.Data[line]
@@ -137,12 +146,21 @@ func (sst *Sstable) WriteData(segment int) {
 		loc = Location{dline.Key, len(sstablebytes) - int(currentks) - int(currentvs), len(dline.Key)}
 		sst.Index = append(sst.Index, loc)
 		indexbytes = append(indexbytes, serializeindex(loc)...)
-		if line == 0 || line == len(sst.Data)-1 {
-			summaryloc = Location{dline.Key, len(summarybytes) - int(currentks) - loc.value, len(dline.Key)}
-			sst.Summary = append(sst.Summary, summaryloc)
-			summarybytes = append(summarybytes, serializeindex(summaryloc)...)
+		summaryloc = Location{dline.Key, len(indexbytes) - int(currentks) - 8, len(dline.Key)}
+		if line == 0{
+			first = summaryloc
 		}
+		if line == len(sst.Data)-1{
+			last = summaryloc
+		}
+		sst.Summary.index = append(sst.Summary.index, summaryloc)
+		summarybytes = append(summarybytes, serializeindex(summaryloc)...)
 	}
+	sst.Summary.first = first
+	sst.Summary.last = last
+	firstlast = append(firstlast,serializeindex(first)...)
+	firstlast = append(firstlast,serializeindex(last)...)
+	firstlast = append(firstlast,summarybytes...)
 	file, _ := os.OpenFile(filename, os.O_APPEND, 0777)
 	file1, _ := os.OpenFile(filename1, os.O_APPEND, 0777)
 	file2, _ := os.OpenFile(filename2, os.O_APPEND, 0777)
@@ -180,7 +198,7 @@ func (sst *Sstable) WriteData(segment int) {
 	if err != nil {
 		return
 	}
-	_, err = file2.Write(summarybytes)
+	_, err = file2.Write(firstlast)
 	if err != nil {
 		return
 	}
