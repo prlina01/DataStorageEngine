@@ -1,7 +1,7 @@
 package MerkleTree
 
 import (
-	"awesomeProject5/WriteAheadLog"
+	"awesomeProject5/Application/WriteAheadLog"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -38,14 +38,14 @@ type MerkleTree struct{
 	root MerkleRoot
 }
 
-func CreateNodes(Lines []WriteAheadLog.Line) []Node{
+func CreateNodes(Lines []WriteAheadLog.Line) []Node {
 	var nodes []Node
 	for i:=range Lines{
-		nodes = append(nodes,Node{Hash(WriteAheadLog.SerializeLine(Lines[i])),nil,nil})
+		nodes = append(nodes, Node{Hash(WriteAheadLog.SerializeLine(Lines[i])),nil,nil})
 	}
 	return nodes
 }
-func (mt *MerkleTree) BuildMT( lines []Node) []Node{
+func (mt *MerkleTree) BuildMT( lines []Node) []Node {
 	var nodes []Node
 	var i int
 	for i = 0; i < len(lines); i += 2 {
@@ -80,7 +80,6 @@ func (mt *MerkleTree) WriteTree(filename string) {
 }
 
 func writeNode(node *Node, level int, file *os.File) {
-	fmt.Printf("(%d) %s %s\n", level, strings.Repeat(" ", level), node.String())
 	_, err2 := fmt.Fprintf(file,"(%d) %s %s\n", level, strings.Repeat(" ", level), node.String())
 	if err2 != nil {
 		return 

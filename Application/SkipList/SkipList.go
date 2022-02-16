@@ -1,7 +1,7 @@
 package SkipList
 
 import (
-	"awesomeProject5/WriteAheadLog"
+	"awesomeProject5/Application/WriteAheadLog"
 	"fmt"
 	"math/rand"
 	"time"
@@ -31,7 +31,7 @@ func (s *SkipList) GetSize() int{
 	return s.size
 }
 
-func (s *SkipList) GetHeader() *SkipListNode{
+func (s *SkipList) GetHeader() *SkipListNode {
 	return s.head
 }
 

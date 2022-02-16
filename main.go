@@ -1,10 +1,10 @@
 package main
 
 import (
-	"awesomeProject5/Cache"
-	"awesomeProject5/SkipList"
-	"awesomeProject5/Sstable"
-	"awesomeProject5/WriteAheadLog"
+	"awesomeProject5/Application/Cache"
+	"awesomeProject5/Application/Memtable"
+	"awesomeProject5/Application/SkipList"
+	"awesomeProject5/Application/WriteAheadLog"
 	"fmt"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -16,51 +16,6 @@ type Config struct {
 	MemtableSize uint64	`yaml:"memtable_size"`
 	LowWaterMark uint8  `yaml:"low_water_mark"`
 	CacheSize int 		`yaml:"cache_size"`
-}
-type MemTable struct{
-	size uint64
-	data *SkipList.SkipList
-	wal *WriteAheadLog.WriteAheadLog
-}
-
-func (memtable* MemTable) Init(){
-	data := memtable.wal.Data
-	if len(data) >= int(memtable.size){
-		return
-	}
-	for line:=range data{
-		memtable.data.InsertNode(data[line].Key,data[line].Value)
-	}
-}
-func (memtable* MemTable) Insert (key string, value []byte){
-	if !memtable.wal.AddKV(key,value){
-		panic("Not written into wal! error!")
-		return
-	}
-	memtable.data.InsertNode(key, value)
-	if memtable.size == uint64(memtable.data.GetSize()){
-		memtable.Flush()
-		memtable.wal.LowWaterMarkRemoval()
-	}
-}
-
-func (memtable* MemTable) Flush (){
-	var list []WriteAheadLog.Line
-	var currentNode *SkipList.SkipListNode
-	currentNode = memtable.data.GetHeader()
-	currentNode = currentNode.Next[0]
-	for ;currentNode != nil;{
-		list = append(list, currentNode.Line)
-		currentNode = currentNode.Next[0]
-	}
-	sst := Sstable.Sstable{}
-	sst.Init(list)
-	memtable.data.CreateSL()
-}
-
-func (memtable* MemTable) Delete(key string){
-	memtable.data.DeleteNode(key)
-
 }
 
 func main() {
@@ -99,7 +54,7 @@ func main() {
 	wal.Init(int64(config.WalSize))
 	wal.LWM = int(config.LowWaterMark)
 
-	mt := MemTable{config.MemtableSize, SkipList.New(20, 0, 0, nil), &wal}
+	mt := Memtable.MemTable{config.MemtableSize, SkipList.New(20, 0, 0, nil), &wal}
 	mt.Init()
 
 	for i:= range keys{

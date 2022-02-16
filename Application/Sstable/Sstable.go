@@ -1,9 +1,9 @@
 package Sstable
 
 import (
-	"awesomeProject5/BloomFilter"
-	"awesomeProject5/MerkleTree"
-	"awesomeProject5/WriteAheadLog"
+	"awesomeProject5/Application/BloomFilter"
+	"awesomeProject5/Application/MerkleTree"
+	"awesomeProject5/Application/WriteAheadLog"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -21,9 +21,9 @@ type Location struct{
 }
 
 type Sstable struct{
-	Summary []Location
-	Index []Location
-	Data []WriteAheadLog.Line
+	Summary     []Location
+	Index       []Location
+	Data        []WriteAheadLog.Line
 	BloomFilter BloomFilter.BloomFilter
 }
 
@@ -125,13 +125,13 @@ func (sst *Sstable) WriteData(segment int){
 		dline := sst.Data[line]
 		currentks := dline.Keysize
 		currentvs := dline.Valuesize
-		sstablebytes = append(sstablebytes,WriteAheadLog.SerializeLine(dline)...)
+		sstablebytes = append(sstablebytes, WriteAheadLog.SerializeLine(dline)...)
 		loc = Location{dline.Key, len(sstablebytes)-int(currentks)-int(currentvs),len(dline.Key)}
 		sst.Index = append(sst.Index, loc)
-		indexbytes = append(indexbytes,serializeindex(loc)...)
+		indexbytes = append(indexbytes, serializeindex(loc)...)
 		summaryloc = Location{dline.Key, len(summarybytes)-int(currentks)-loc.value, len(dline.Key)}
 		sst.Summary = append(sst.Summary,summaryloc)
-		summarybytes = append(summarybytes,serializeindex(summaryloc)...)
+		summarybytes = append(summarybytes, serializeindex(summaryloc)...)
 	}
 	file,_ := os.OpenFile(filename,os.O_APPEND,0777)
 	file1,_ := os.OpenFile(filename1,os.O_APPEND,0777)
