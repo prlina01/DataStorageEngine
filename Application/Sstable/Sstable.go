@@ -74,6 +74,61 @@ func ParseIndex(f *os.File) []Location {
 	return locations
 }
 
+func ParseSummary(f *os.File) Summary {
+	summary := Summary{}
+	indexes := []Location{}
+	firstline := Location{}
+	lastline := Location{}
+	keylenbytes := make([]byte, 4)
+	_, _ = f.Read(keylenbytes)
+	firstline.keylenght = int(binary.LittleEndian.Uint32(keylenbytes))
+
+	keybytes := make([]byte, firstline.keylenght)
+	_, _ = f.Read(keybytes)
+	firstline.key = string(keybytes)
+
+	locationbytes := make([]byte, 8)
+	_, _ = f.Read(locationbytes)
+	firstline.value = int(binary.LittleEndian.Uint64(locationbytes))
+
+	keylenbytes2 := make([]byte, 4)
+	_, _ = f.Read(keylenbytes2)
+	lastline.keylenght = int(binary.LittleEndian.Uint32(keylenbytes2))
+
+	keybytes2 := make([]byte, lastline.keylenght)
+	_, _ = f.Read(keybytes2)
+	lastline.key = string(keybytes2)
+
+	locationbytes2 := make([]byte, 8)
+	_, _ = f.Read(locationbytes)
+	lastline.value = int(binary.LittleEndian.Uint64(locationbytes2))
+
+	summary.first = firstline
+	summary.last = lastline
+
+	for {
+		index := Location{}
+		keylenbytes := make([]byte, 4)
+		_, err := f.Read(keylenbytes)
+		if err == io.EOF {
+			break
+		}
+		index.keylenght = int(binary.LittleEndian.Uint32(keylenbytes))
+
+		keybytes := make([]byte, index.keylenght)
+		_, _ = f.Read(keybytes)
+		index.key = string(keybytes)
+
+		locationbytes := make([]byte, 8)
+		_, _ = f.Read(locationbytes)
+		index.value = int(binary.LittleEndian.Uint64(locationbytes))
+		indexes = append(indexes, index)
+	}
+
+	summary.index = indexes
+
+	return summary
+}
 
 
 func ParseBloom(f *os.File) BloomFilter.BloomFilter {
@@ -162,7 +217,7 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line) {
 
 	_, err = f.Readdirnames(1)
 	if err == io.EOF {
-		sst.WriteData(1)
+		sst.WriteData(1 ,1)
 		return
 	}
 	files, err := ioutil.ReadDir("Data/")
@@ -177,7 +232,7 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line) {
 			intval, _ = strconv.Atoi(sliced2[1])
 		}
 	}
-	sst.WriteData(intval + 1)
+	sst.WriteData(intval + 1, 1)
 }
 func ParseData(f *os.File) []WriteAheadLog.Line {
 	whlLines := []WriteAheadLog.Line{}
@@ -187,13 +242,15 @@ func ParseData(f *os.File) []WriteAheadLog.Line {
 	return whlLines
 }
 
-func (sst *Sstable) WriteData(segment int) {
+func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	pad := fmt.Sprintf("%04d", segment)
-	filename := "Data/Sstable-" + pad + ".db"
-	filename1 := "Data/Index-" + pad + ".db"
-	filename2 := "Data/Summary-" + pad + ".db"
-	filename3 := "Data/BloomFilter-" + pad + ".db"
-	filename4 := "Data/Metadata-" + pad + ".txt"
+
+
+	filename := "Data/" + string(rune(lsmLevel)) + "-Sstable-" + pad + ".db"
+	filename1 := "Data/" + string(rune(lsmLevel)) + "-Index-" + pad + ".db"
+	filename2 := "Data/" + string(rune(lsmLevel)) + "-Summary-" + pad + ".db"
+	filename3 := "Data/" + string(rune(lsmLevel)) + "-BloomFilter-" + pad + ".db"
+	filename4 := "Data/" + string(rune(lsmLevel)) + "-Metadata-" + pad + ".txt"
 	filename5 := "Data/TOC-" + pad + ".db"
 	_, _ = os.Create(filename)
 	_, _ = os.Create(filename1)

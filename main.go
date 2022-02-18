@@ -14,7 +14,9 @@ type Config struct {
 	WalSize      uint64 `yaml:"wal_size"`
 	MemtableSize uint64 `yaml:"memtable_size"`
 	LowWaterMark uint8  `yaml:"low_water_mark"`
-	CacheSize    int    `yaml:"cache_size"`
+	CacheSize       int `yaml:"cache_size"`
+	MaxLsmTreeLevel int `yaml:"max_lsm_tree_level"`
+	MaxLsmNodesPerLevel int `yaml:"max_lsm_nodes_per_level"`
 }
 
 func main() {

@@ -2,3 +2,6 @@ wal_size: 10
 memtable_size: 10
 low_water_mark: 2
 cache_size: 5
+
+max_lsm_tree_level: 4
+max_lsm_nodes_per_level: 4
