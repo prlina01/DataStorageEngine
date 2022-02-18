@@ -12,6 +12,7 @@ type BloomFilter struct {
 	K             uint
 	HashFunctions []hash.Hash32
 	BitSet        []int
+	HashFunctionsConfig uint32
 }
 
 func (b1 *BloomFilter) CreateBitSet() {
@@ -48,11 +49,11 @@ func CalculateK(expectedElements int, m uint) uint {
 	return uint(math.Ceil((float64(m) / float64(expectedElements)) * math.Log(2)))
 }
 
-func CreateHashFunctions(k uint) []hash.Hash32 {
+func CreateHashFunctions(k uint) ([]hash.Hash32, uint32) {
 	h := []hash.Hash32{}
 	ts := uint(time.Now().Unix())
 	for i := uint(0); i < k; i++ {
 		h = append(h, murmur3.New32WithSeed(uint32(ts+i)))
 	}
-	return h
+	return h, uint32(ts)
 }

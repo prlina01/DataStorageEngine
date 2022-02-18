@@ -6,6 +6,8 @@ import (
 	"KeyDataStorage/Application/WriteAheadLog"
 	"encoding/binary"
 	"fmt"
+	"github.com/spaolacci/murmur3"
+	"hash"
 	"io"
 	"io/ioutil"
 	"log"
@@ -46,6 +48,71 @@ func serializeindex(loc Location) []byte {
 	return allbytes
 }
 
+func ParseIndex(f *os.File) []Location {
+	locations := []Location{}
+
+	for {
+		location := Location{}
+		keylenbytes := make([]byte, 4)
+		_, err := f.Read(keylenbytes)
+		if err == io.EOF {
+			break
+		}
+		location.keylenght = int(binary.LittleEndian.Uint32(keylenbytes))
+
+		keybytes := make([]byte, location.keylenght)
+		_, _ = f.Read(keybytes)
+		location.key = string(keybytes)
+
+		locationbytes := make([]byte, 8)
+		_, _ = f.Read(locationbytes)
+		location.value = int(binary.LittleEndian.Uint64(locationbytes))
+		locations = append(locations, location)
+	}
+
+
+	return locations
+}
+
+
+
+func ParseBloom(f *os.File) BloomFilter.BloomFilter {
+	bloom := BloomFilter.BloomFilter{}
+	var bit_set []int
+	mbytes := make([]byte, 8)
+	_, _ = f.Read(mbytes)
+	bloom.M = uint(binary.LittleEndian.Uint64(mbytes))
+	kbytes := make([]byte, 8)
+	_, _ = f.Read(kbytes)
+	bloom.K = uint(binary.LittleEndian.Uint64(kbytes))
+
+	h := []hash.Hash32{}
+	//ts := uint(time.Now().Unix())
+
+	hashConfigBytes := make([]byte, 4)
+	_, _ = f.Read(hashConfigBytes)
+	bloom.HashFunctionsConfig = uint32(binary.LittleEndian.Uint32(hashConfigBytes))
+
+	for i := uint(0); i < bloom.K; i++ {
+		h = append(h, murmur3.New32WithSeed(bloom.HashFunctionsConfig+uint32(i)))
+	}
+	bloom.HashFunctions = h
+
+	for {
+		element_of_bit_set := make([]byte, 4)
+		_, err := f.Read(element_of_bit_set)
+		if err == io.EOF {
+			break
+		}
+		int_element_of_bit_set := binary.LittleEndian.Uint32(element_of_bit_set)
+		bit_set = append(bit_set, int(int_element_of_bit_set))
+	}
+
+	bloom.BitSet = bit_set
+
+	return bloom
+}
+
 func serializeBloom(filter BloomFilter.BloomFilter) []byte {
 	var allbytes []byte
 	mbytes := make([]byte, 8)
@@ -54,6 +121,12 @@ func serializeBloom(filter BloomFilter.BloomFilter) []byte {
 	binary.LittleEndian.PutUint64(kbytes, uint64(filter.K))
 	allbytes = append(allbytes, mbytes...)
 	allbytes = append(allbytes, kbytes...)
+
+	hashConfiguration := filter.HashFunctionsConfig
+	elem_hash := make([]byte, 4)
+	binary.LittleEndian.PutUint32(elem_hash, uint32(hashConfiguration))
+	allbytes = append(allbytes, elem_hash...)
+
 	set := filter.BitSet
 	for line := range set {
 		elem := make([]byte, 4)
@@ -68,7 +141,7 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line) {
 	sst.BloomFilter = BloomFilter.BloomFilter{}
 	sst.BloomFilter.M = BloomFilter.CalculateM(len(data), 0.005)
 	sst.BloomFilter.K = BloomFilter.CalculateK(len(data), sst.BloomFilter.M)
-	sst.BloomFilter.HashFunctions = BloomFilter.CreateHashFunctions(sst.BloomFilter.K)
+	sst.BloomFilter.HashFunctions, sst.BloomFilter.HashFunctionsConfig = BloomFilter.CreateHashFunctions(sst.BloomFilter.K)
 	sst.BloomFilter.CreateBitSet()
 	for line := range data {
 		sst.BloomFilter.AddElement(data[line].Key)
@@ -105,6 +178,13 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line) {
 		}
 	}
 	sst.WriteData(intval + 1)
+}
+func ParseData(f *os.File) []WriteAheadLog.Line {
+	whlLines := []WriteAheadLog.Line{}
+	parsedLine := WriteAheadLog.ParseLine(f)
+	whlLines = append(whlLines, parsedLine )
+
+	return whlLines
 }
 
 func (sst *Sstable) WriteData(segment int) {
