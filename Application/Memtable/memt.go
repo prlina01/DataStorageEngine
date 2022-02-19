@@ -4,6 +4,7 @@ import (
 	"KeyDataStorage/Application/SkipList"
 	"KeyDataStorage/Application/Sstable"
 	"KeyDataStorage/Application/WriteAheadLog"
+	"fmt"
 )
 
 type MemTable struct {
@@ -45,6 +46,12 @@ func (memtable *MemTable) Flush() {
 	sst := Sstable.Sstable{}
 	sst.Init(list)
 	memtable.Data = SkipList.New(20, 0, 0, nil)
+
+	fmt.Println("Do you want to start compaction of LSM Tree? 1-Yes; Something else-No")
+	answer, _ := fmt.Scan()
+	if int(answer) == 1 {
+		Sstable.Compaction()
+	}
 }
 
 func (memtable *MemTable) Delete(key string) {

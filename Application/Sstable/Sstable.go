@@ -3,6 +3,7 @@ package Sstable
 import (
 	"KeyDataStorage/Application/BloomFilter"
 	"KeyDataStorage/Application/MerkleTree"
+	"KeyDataStorage/Application/Utils"
 	"KeyDataStorage/Application/WriteAheadLog"
 	"encoding/binary"
 	"fmt"
@@ -14,7 +15,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
 )
+
+type LsmTreeConfig struct {
+	MaxLsmTreeLevel int `yaml:"max_lsm_tree_level"`
+	MaxLsmNodesFirstLevel int `yaml:"max_lsm_nodes_first_level"`
+	MaxLsmNodesOtherLevels int `yaml:"max_lsm_nodes_other_levels"`
+}
 
 type Summary struct{
 	first Location
@@ -33,7 +41,97 @@ type Sstable struct {
 	Index       []Location
 	Data        []WriteAheadLog.Line
 	BloomFilter BloomFilter.BloomFilter
+	Identifier string
 }
+
+
+
+func Compaction() {
+	var config LsmTreeConfig
+	level := 1
+	for level < config.MaxLsmTreeLevel {
+		fileNames := Utils.Find(strconv.Itoa(level)+"Sstable.*")
+
+		if len(fileNames) == 0 {
+			if level == 1 {
+				fmt.Println("No Sstables at the moment")
+			}
+			return
+		}
+
+		if level == 1 {
+			if len(fileNames) == 1{
+				fmt.Println("Can not do compaction on only one Sstable!")
+				return
+			}
+
+			if len(fileNames) < config.MaxLsmNodesFirstLevel {
+				fmt.Println("Not enough SStables for compaction, try again later.")
+			}
+
+			lines := []WriteAheadLog.Line{}
+
+			f1, _ := os.Open(fileNames[0])
+			f2, _ := os.Open(fileNames[1])
+			sst := Sstable{}
+			for i:=1; i < config.MaxLsmNodesFirstLevel; i++ {
+				if i >= 2 {
+					f1, _ = os.Open(sst.Identifier)
+					f2, _ = os.Open(fileNames[i])
+				}
+
+				for {
+					line1, err1 := WriteAheadLog.ParseLine(f1)
+					line2, err2 := WriteAheadLog.ParseLine(f2)
+
+					if err1==nil && err2!=nil {
+						lines = append(lines, line1)
+					} else if err1!=nil && err2==nil {
+						lines = append(lines, line2)
+					} else if err1!=nil && err2!=nil {break}
+
+					if line1.Key < line2.Key {
+						lines = append(lines, line1)
+						f2.Seek(int64(-29-line2.Keysize-line2.Valuesize), 1)
+					} else if line2.Key < line1.Key {
+						lines = append(lines, line2)
+						f1.Seek(int64(-29-line1.Keysize-line1.Valuesize), 1)
+					} else if line1.Key == line2.Key {
+						if line1.Tombstone == 1 || line2.Tombstone == 1 {
+							fmt.Println(line1.Key + " obrisan!")
+							continue
+						} else if line1.Timestamp > line2.Timestamp {
+							lines = append(lines, line1)
+						} else {lines = append(lines, line2)}
+					}
+				}
+
+
+
+				sst = Sstable{}
+				sst.Init(lines)
+				lines = []WriteAheadLog.Line{}
+
+
+
+			}
+		}
+
+
+
+
+
+		// izlazak
+		if level > 1 && len(fileNames) < config.MaxLsmNodesOtherLevels {return}
+
+
+		}
+
+
+		level += 1
+}
+
+
 
 func serializeindex(loc Location) []byte {
 	var allbytes []byte
@@ -191,6 +289,10 @@ func serializeBloom(filter BloomFilter.BloomFilter) []byte {
 	return allbytes
 }
 
+func (sst *Sstable) findPath() {
+
+}
+
 func (sst *Sstable) Init(data []WriteAheadLog.Line) {
 	sst.Data = data
 	sst.BloomFilter = BloomFilter.BloomFilter{}
@@ -236,7 +338,7 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line) {
 }
 func ParseData(f *os.File) []WriteAheadLog.Line {
 	whlLines := []WriteAheadLog.Line{}
-	parsedLine := WriteAheadLog.ParseLine(f)
+	parsedLine, _ := WriteAheadLog.ParseLine(f)
 	whlLines = append(whlLines, parsedLine )
 
 	return whlLines
@@ -247,6 +349,7 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 
 
 	filename := "Data/" + string(rune(lsmLevel)) + "-Sstable-" + pad + ".db"
+	sst.Identifier = filename
 	filename1 := "Data/" + string(rune(lsmLevel)) + "-Index-" + pad + ".db"
 	filename2 := "Data/" + string(rune(lsmLevel)) + "-Summary-" + pad + ".db"
 	filename3 := "Data/" + string(rune(lsmLevel)) + "-BloomFilter-" + pad + ".db"

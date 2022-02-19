@@ -4,4 +4,5 @@ low_water_mark: 2
 cache_size: 5
 
 max_lsm_tree_level: 4
-max_lsm_nodes_per_level: 4
+max_lsm_nodes_first_level: 4
+max_lsm_nodes_other_levels: 2

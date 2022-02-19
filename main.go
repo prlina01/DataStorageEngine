@@ -1,8 +1,10 @@
 package main
+
 import (
 	"KeyDataStorage/Application/Cache"
 	"KeyDataStorage/Application/Memtable"
 	"KeyDataStorage/Application/SkipList"
+	"KeyDataStorage/Application/Sstable"
 	"KeyDataStorage/Application/WriteAheadLog"
 	"fmt"
 	yaml "gopkg.in/yaml.v2"
@@ -15,8 +17,6 @@ type Config struct {
 	MemtableSize uint64 `yaml:"memtable_size"`
 	LowWaterMark uint8  `yaml:"low_water_mark"`
 	CacheSize       int `yaml:"cache_size"`
-	MaxLsmTreeLevel int `yaml:"max_lsm_tree_level"`
-	MaxLsmNodesPerLevel int `yaml:"max_lsm_nodes_per_level"`
 }
 
 func main() {
@@ -67,5 +67,7 @@ func main() {
 	cache.RemoveKey("gasdg")
 	fmt.Println(cache.FindKey("sdds"))
 	cache.PrintAll()
+	Sstable.Compaction()
+
 
 }
