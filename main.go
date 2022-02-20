@@ -67,7 +67,15 @@ func main() {
 	cache.RemoveKey("gasdg")
 	fmt.Println(cache.FindKey("sdds"))
 	cache.PrintAll()
-	Sstable.Compaction()
+	//Sstable.Compaction()
+
+	kljuc := "gasdg"
+
+	if mt.Data.FindElement(kljuc) == nil {
+		if cache.FindKey(kljuc) == nil {
+			Sstable.FindKey(kljuc)
+		}
+	}
 
 
 }

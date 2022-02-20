@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -42,6 +43,67 @@ type Sstable struct {
 	Data        []WriteAheadLog.Line
 	BloomFilter BloomFilter.BloomFilter
 	Identifier string
+}
+
+func FindKey(searchKey string) bool {
+	sstables := GetKeyDataStructure()
+	keys := make([]int, 0)
+	for k, _ := range sstables {
+		keys = append(keys, int(k))
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		for _, sstable := range sstables[uint32(k)] {
+
+			f_bloomFilter, err := os.Open(sstable["BloomFilter"])
+			if err!= nil {panic("can't open file!")}
+			bloomFilter := ParseBloom(f_bloomFilter)
+			if bloomFilter.IsElementInBloomFilter(searchKey) {
+				fmt.Println("Key has been found")
+				return true
+			}
+
+			f_summary, err := os.Open(sstable["Summary"])
+			if err!= nil {panic("Can't open file!")}
+			summary := ParseSummary(f_summary)
+			if searchKey > summary.first.key && searchKey < summary.last.key {
+
+			} else {
+				continue
+			}
+
+		}
+	}
+
+	return false
+}
+
+func GetKeyDataStructure() map[uint32][]map[string]string {
+	fileNames := Utils.Find(".*Sstable.*")
+	var sstables map[uint32][]map[string]string
+	for _, fileName := range fileNames {
+		firstSplit := strings.Split(fileName, ".")[0]
+		secondSplit := strings.Split(firstSplit, "-")
+
+		identifier_mul, err := strconv.Atoi(secondSplit[0])
+		if err!= nil {panic("Can't convert value!")}
+
+		var connectedFilesMap map[string]string
+
+		connectedFiles := Utils.Find(".*"+secondSplit[2])
+		for _, connectedFile := range connectedFiles {
+			connectedFilesMap["Sstable"] = fileName
+			if strings.Contains(connectedFile, "BloomFilter") {
+				connectedFilesMap["BloomFilter"] = connectedFile
+			} else 	if strings.Contains(connectedFile, "Index") {
+				connectedFilesMap["Index"] = connectedFile
+			} else 	if strings.Contains(connectedFile, "Summary") {
+				connectedFilesMap["Summary"] = connectedFile
+			}
+		}
+		sstables[uint32(identifier_mul)] = append(sstables[uint32(identifier_mul)], connectedFilesMap)
+	}
+	return sstables
 }
 
 func  DeleteSSTableAndConnectedParts(path string) {
@@ -106,6 +168,7 @@ func Compaction() {
 
 		// izlazak
 		if level > 1 && len(fileNames) < config.MaxLsmNodesOtherLevels {return}
+
 
 		lines := []WriteAheadLog.Line{}
 

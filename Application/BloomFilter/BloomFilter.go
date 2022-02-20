@@ -29,7 +29,7 @@ func (b1 *BloomFilter) AddElement(element string) {
 
 }
 
-func (b1 *BloomFilter) isElementInBloomFilter(element string) bool {
+func (b1 *BloomFilter) IsElementInBloomFilter(element string) bool {
 	for j := 0; j < len(b1.HashFunctions); j++ {
 		b1.HashFunctions[j].Reset()
 		b1.HashFunctions[j].Write([]byte(element))
