@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/spaolacci/murmur3"
+	"gopkg.in/yaml.v2"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -15,7 +16,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
 )
 
 type LsmTreeConfig struct {
@@ -44,13 +44,45 @@ type Sstable struct {
 	Identifier string
 }
 
+func  DeleteSSTableAndConnectedParts(path string) {
+	identifier_mul := strings.Split(path, ".")
+	identifier_mul = strings.Split(identifier_mul[0], "-")
+	identifier := identifier_mul[2]
+	files, err := ioutil.ReadDir("Data/")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, file := range files {
+		sliced := strings.Split(file.Name(), ".")
+		identifier_other := strings.Split(sliced[0], "-")[2]
+		if identifier == identifier_other {
+			e:= os.Remove(file.Name())
+			if e!= nil {
+				panic("Can't delete file")
+			}
+		}
 
+	}
+	e:= os.Remove(path)
+	if e!= nil {
+		panic("Can't delete file")
+	}
+
+}
 
 func Compaction() {
 	var config LsmTreeConfig
+	configData, err := ioutil.ReadFile("config.yml")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = yaml.Unmarshal(configData, &config)
+	if err != nil {
+		log.Fatal(err)
+	}
 	level := 1
 	for level < config.MaxLsmTreeLevel {
-		fileNames := Utils.Find(strconv.Itoa(level)+"Sstable.*")
+		fileNames := Utils.Find(strconv.Itoa(level)+".*Sstable.*")
 
 		if len(fileNames) == 0 {
 			if level == 1 {
@@ -67,68 +99,78 @@ func Compaction() {
 
 			if len(fileNames) < config.MaxLsmNodesFirstLevel {
 				fmt.Println("Not enough SStables for compaction, try again later.")
+				return
 			}
 
-			lines := []WriteAheadLog.Line{}
-
-			f1, _ := os.Open(fileNames[0])
-			f2, _ := os.Open(fileNames[1])
-			sst := Sstable{}
-			for i:=1; i < config.MaxLsmNodesFirstLevel; i++ {
-				if i >= 2 {
-					f1, _ = os.Open(sst.Identifier)
-					f2, _ = os.Open(fileNames[i])
-				}
-
-				for {
-					line1, err1 := WriteAheadLog.ParseLine(f1)
-					line2, err2 := WriteAheadLog.ParseLine(f2)
-
-					if err1==nil && err2!=nil {
-						lines = append(lines, line1)
-					} else if err1!=nil && err2==nil {
-						lines = append(lines, line2)
-					} else if err1!=nil && err2!=nil {break}
-
-					if line1.Key < line2.Key {
-						lines = append(lines, line1)
-						f2.Seek(int64(-29-line2.Keysize-line2.Valuesize), 1)
-					} else if line2.Key < line1.Key {
-						lines = append(lines, line2)
-						f1.Seek(int64(-29-line1.Keysize-line1.Valuesize), 1)
-					} else if line1.Key == line2.Key {
-						if line1.Tombstone == 1 || line2.Tombstone == 1 {
-							fmt.Println(line1.Key + " obrisan!")
-							continue
-						} else if line1.Timestamp > line2.Timestamp {
-							lines = append(lines, line1)
-						} else {lines = append(lines, line2)}
-					}
-				}
-
-
-
-				sst = Sstable{}
-				sst.Init(lines)
-				lines = []WriteAheadLog.Line{}
-
-
-
-			}
 		}
-
-
-
-
 
 		// izlazak
 		if level > 1 && len(fileNames) < config.MaxLsmNodesOtherLevels {return}
 
+		lines := []WriteAheadLog.Line{}
+
+		f1, _ := os.Open(fileNames[0])
+		f2, _ := os.Open(fileNames[1])
+		sst := Sstable{}
+		for i:=1; i < config.MaxLsmNodesFirstLevel; i++ {
+			if i >= 2 {
+				f1, _ = os.Open(sst.Identifier)
+				f2, _ = os.Open(fileNames[i])
+			}
+
+			for {
+				line1, err1 := WriteAheadLog.ParseLine(f1)
+				line2, err2 := WriteAheadLog.ParseLine(f2)
+
+				if err1==nil && err2!=nil {
+					lines = append(lines, line1)
+				} else if err1!=nil && err2==nil {
+					lines = append(lines, line2)
+				} else if err1!=nil && err2!=nil {break}
+
+				if line1.Key < line2.Key {
+					lines = append(lines, line1)
+					f2.Seek(-29-int64(line2.Keysize)-int64(line2.Valuesize), 1)
+				} else if line2.Key < line1.Key {
+					lines = append(lines, line2)
+					f1.Seek(-29-int64(line1.Keysize)-int64(line1.Valuesize), 1)
+				} else if line1.Key == line2.Key {
+					if line1.Tombstone == 1 || line2.Tombstone == 1 {
+						fmt.Println(line1.Key + " has been deleted!")
+						continue
+					} else if line1.Timestamp > line2.Timestamp {
+						lines = append(lines, line1)
+					} else {lines = append(lines, line2)}
+				}
+			}
+
+			err := f1.Close()
+			if err != nil {
+				panic("Error closing file")
+			}
+			err2 := f2.Close()
+			if err2 != nil {
+				panic("Error closing file")
+			}
+
+			DeleteSSTableAndConnectedParts(f1.Name())
+			DeleteSSTableAndConnectedParts(f2.Name())
+
+			sst = Sstable{}
+			sst.Init(lines, level)
+			lines = []WriteAheadLog.Line{}
 
 		}
 
+		new_level_sst := Sstable{}
+
+		DeleteSSTableAndConnectedParts(sst.Identifier)
+		new_level_sst.Init(sst.Data, level + 1)
+
 
 		level += 1
+	}
+
 }
 
 
@@ -293,7 +335,7 @@ func (sst *Sstable) findPath() {
 
 }
 
-func (sst *Sstable) Init(data []WriteAheadLog.Line) {
+func (sst *Sstable) Init(data []WriteAheadLog.Line, lsmLevel int) {
 	sst.Data = data
 	sst.BloomFilter = BloomFilter.BloomFilter{}
 	sst.BloomFilter.M = BloomFilter.CalculateM(len(data), 0.005)
@@ -334,7 +376,7 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line) {
 			intval, _ = strconv.Atoi(sliced2[1])
 		}
 	}
-	sst.WriteData(intval + 1, 1)
+	sst.WriteData(intval + 1, lsmLevel)
 }
 func ParseData(f *os.File) []WriteAheadLog.Line {
 	whlLines := []WriteAheadLog.Line{}
@@ -348,13 +390,13 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	pad := fmt.Sprintf("%04d", segment)
 
 
-	filename := "Data/" + string(rune(lsmLevel)) + "-Sstable-" + pad + ".db"
+	filename := "Data/" + strconv.Itoa(lsmLevel) + "-Sstable-" + pad + ".db"
 	sst.Identifier = filename
-	filename1 := "Data/" + string(rune(lsmLevel)) + "-Index-" + pad + ".db"
-	filename2 := "Data/" + string(rune(lsmLevel)) + "-Summary-" + pad + ".db"
-	filename3 := "Data/" + string(rune(lsmLevel)) + "-BloomFilter-" + pad + ".db"
-	filename4 := "Data/" + string(rune(lsmLevel)) + "-Metadata-" + pad + ".txt"
-	filename5 := "Data/TOC-" + pad + ".db"
+	filename1 := "Data/" + strconv.Itoa(lsmLevel) +  "-Index-" + pad + ".db"
+	filename2 := "Data/"+ strconv.Itoa(lsmLevel) + "-Summary-" + pad + ".db"
+	filename3 := "Data/"+ strconv.Itoa(lsmLevel) + "-BloomFilter-" + pad + ".db"
+	filename4 := "Data/"+ strconv.Itoa(lsmLevel) + "-Metadata-" + pad + ".txt"
+	filename5 := "Data/"+ strconv.Itoa(lsmLevel) + "-TOC-" + pad + ".db"
 	_, _ = os.Create(filename)
 	_, _ = os.Create(filename1)
 	_, _ = os.Create(filename2)
