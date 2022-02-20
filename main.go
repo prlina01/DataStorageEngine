@@ -73,7 +73,9 @@ func main() {
 
 	if mt.Data.FindElement(kljuc) == nil {
 		if cache.FindKey(kljuc) == nil {
-			Sstable.FindKey(kljuc)
+			if!(Sstable.FindKey(kljuc)) {
+				fmt.Println("Key has not been found!")
+			}
 		}
 	}
 

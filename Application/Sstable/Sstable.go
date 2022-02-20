@@ -58,20 +58,40 @@ func FindKey(searchKey string) bool {
 			f_bloomFilter, err := os.Open(sstable["BloomFilter"])
 			if err!= nil {panic("can't open file!")}
 			bloomFilter := ParseBloom(f_bloomFilter)
-			if bloomFilter.IsElementInBloomFilter(searchKey) {
-				fmt.Println("Key has been found")
-				return true
+			if !bloomFilter.IsElementInBloomFilter(searchKey) {
+				continue
 			}
 
 			f_summary, err := os.Open(sstable["Summary"])
 			if err!= nil {panic("Can't open file!")}
+			indexOffsetNeeded := 0
 			summary := ParseSummary(f_summary)
-			if searchKey > summary.first.key && searchKey < summary.last.key {
+			if searchKey >= summary.first.key && searchKey <= summary.last.key {
+				for _, summaryLine := range summary.index {
+					if summaryLine.key == searchKey {
+						indexOffsetNeeded = summaryLine.value
+					}
+				}
+				if indexOffsetNeeded == 0 { continue }
+			} else { continue }
 
-			} else {
-				continue
+			f_index, err := os.Open(sstable["Index"])
+			if err!= nil {panic("Can't open file!")}
+			f_index.Seek(int64(indexOffsetNeeded),1)
+			indexLine := ParseIndexLine(f_index)
+			dataOffsetNeeded := indexLine.value
+
+
+
+			f_data, err := os.Open(sstable["Sstable"])
+			if err!= nil {panic("Can't open file!")}
+			f_data.Seek(int64(dataOffsetNeeded), 1)
+			dataLine, err := WriteAheadLog.ParseLine(f_data)
+			if err!= nil {panic("Can't read from file!")}
+			if dataLine.Key == searchKey {
+				fmt.Println("Key has been found, It's value is " + string(dataLine.Value))
+				return true
 			}
-
 		}
 	}
 
@@ -175,55 +195,137 @@ func Compaction() {
 		f1, _ := os.Open(fileNames[0])
 		f2, _ := os.Open(fileNames[1])
 		sst := Sstable{}
-		for i:=1; i < config.MaxLsmNodesFirstLevel; i++ {
-			if i >= 2 {
-				f1, _ = os.Open(sst.Identifier)
-				f2, _ = os.Open(fileNames[i])
-			}
-
-			for {
-				line1, err1 := WriteAheadLog.ParseLine(f1)
-				line2, err2 := WriteAheadLog.ParseLine(f2)
-
-				if err1==nil && err2!=nil {
-					lines = append(lines, line1)
-				} else if err1!=nil && err2==nil {
-					lines = append(lines, line2)
-				} else if err1!=nil && err2!=nil {break}
-
-				if line1.Key < line2.Key {
-					lines = append(lines, line1)
-					f2.Seek(-29-int64(line2.Keysize)-int64(line2.Valuesize), 1)
-				} else if line2.Key < line1.Key {
-					lines = append(lines, line2)
-					f1.Seek(-29-int64(line1.Keysize)-int64(line1.Valuesize), 1)
-				} else if line1.Key == line2.Key {
-					if line1.Tombstone == 1 || line2.Tombstone == 1 {
-						fmt.Println(line1.Key + " has been deleted!")
-						continue
-					} else if line1.Timestamp > line2.Timestamp {
-						lines = append(lines, line1)
-					} else {lines = append(lines, line2)}
+		// TODO rastaviti na dva zbog config.MaxLsmNodesFirstLevel
+		if level <= 1 {
+			for i:=1; i < config.MaxLsmNodesFirstLevel; i++ {
+				if i >= 2 {
+					f1, _ = os.Open(sst.Identifier)
+					f2, _ = os.Open(fileNames[i])
 				}
+
+				for {
+					line1, err1 := WriteAheadLog.ParseLine(f1)
+					line2, err2 := WriteAheadLog.ParseLine(f2)
+
+					if err1==nil && err2!=nil {
+						lines = append(lines, line1)
+						continue
+					} else if err1!=nil && err2==nil {
+						lines = append(lines, line2)
+						continue
+					} else if err1!=nil && err2!=nil {break}
+
+					if line1.Key < line2.Key {
+						lines = append(lines, line1)
+						f2.Seek(-29-int64(line2.Keysize)-int64(line2.Valuesize), 1)
+					} else if line2.Key < line1.Key {
+						lines = append(lines, line2)
+						f1.Seek(-29-int64(line1.Keysize)-int64(line1.Valuesize), 1)
+					} else if line1.Key == line2.Key {
+						if line1.Tombstone == 1 && line2.Tombstone == 1 {
+							fmt.Println(line1.Key + " has been deleted!")
+							continue
+						} else if line1.Tombstone == 1 && line1.Timestamp < line2.Timestamp {
+							lines = append(lines, line2)
+							continue
+						} else if line1.Tombstone == 1 && line1.Timestamp > line2.Timestamp  {
+							fmt.Println(line1.Key + " has been deleted!")
+							continue
+						} else if line2.Tombstone == 1 && line2.Timestamp < line1.Timestamp {
+							lines = append(lines, line1)
+							continue
+						} else if line2.Tombstone == 1 && line2.Timestamp > line1.Timestamp {
+							fmt.Println(line2.Key + "has been deleted")
+							continue
+						} else if line1.Timestamp > line2.Timestamp {
+							lines = append(lines, line1)
+						} else {lines = append(lines, line2)}
+					}
+				}
+
+				err := f1.Close()
+				if err != nil {
+					panic("Error closing file")
+				}
+				err2 := f2.Close()
+				if err2 != nil {
+					panic("Error closing file")
+				}
+
+				DeleteSSTableAndConnectedParts(f1.Name())
+				DeleteSSTableAndConnectedParts(f2.Name())
+
+				sst = Sstable{}
+				sst.Init(lines, level)
+				lines = []WriteAheadLog.Line{}
+
 			}
+		} else {
+			for i:=1; i < config.MaxLsmNodesOtherLevels; i++ {
+				if i >= 2 {
+					f1, _ = os.Open(sst.Identifier)
+					f2, _ = os.Open(fileNames[i])
+				}
 
-			err := f1.Close()
-			if err != nil {
-				panic("Error closing file")
+				for {
+					line1, err1 := WriteAheadLog.ParseLine(f1)
+					line2, err2 := WriteAheadLog.ParseLine(f2)
+
+					if err1==nil && err2!=nil {
+						lines = append(lines, line1)
+						continue
+					} else if err1!=nil && err2==nil {
+						lines = append(lines, line2)
+						continue
+					} else if err1!=nil && err2!=nil {break}
+
+					if line1.Key < line2.Key {
+						lines = append(lines, line1)
+						f2.Seek(-29-int64(line2.Keysize)-int64(line2.Valuesize), 1)
+					} else if line2.Key < line1.Key {
+						lines = append(lines, line2)
+						f1.Seek(-29-int64(line1.Keysize)-int64(line1.Valuesize), 1)
+					} else if line1.Key == line2.Key {
+						if line1.Tombstone == 1 && line2.Tombstone == 1 {
+							fmt.Println(line1.Key + " has been deleted!")
+							continue
+						} else if line1.Tombstone == 1 && line1.Timestamp < line2.Timestamp {
+							lines = append(lines, line2)
+							continue
+						} else if line1.Tombstone == 1 && line1.Timestamp > line2.Timestamp  {
+							fmt.Println(line1.Key + " has been deleted!")
+							continue
+						} else if line2.Tombstone == 1 && line2.Timestamp < line1.Timestamp {
+							lines = append(lines, line1)
+							continue
+						} else if line2.Tombstone == 1 && line2.Timestamp > line1.Timestamp {
+							fmt.Println(line2.Key + "has been deleted")
+							continue
+						} else if line1.Timestamp > line2.Timestamp {
+							lines = append(lines, line1)
+						} else {lines = append(lines, line2)}
+					}
+				}
+
+				err := f1.Close()
+				if err != nil {
+					panic("Error closing file")
+				}
+				err2 := f2.Close()
+				if err2 != nil {
+					panic("Error closing file")
+				}
+
+				DeleteSSTableAndConnectedParts(f1.Name())
+				DeleteSSTableAndConnectedParts(f2.Name())
+
+				sst = Sstable{}
+				sst.Init(lines, level)
+				lines = []WriteAheadLog.Line{}
+
 			}
-			err2 := f2.Close()
-			if err2 != nil {
-				panic("Error closing file")
-			}
-
-			DeleteSSTableAndConnectedParts(f1.Name())
-			DeleteSSTableAndConnectedParts(f2.Name())
-
-			sst = Sstable{}
-			sst.Init(lines, level)
-			lines = []WriteAheadLog.Line{}
-
 		}
+
 
 		new_level_sst := Sstable{}
 
@@ -275,6 +377,26 @@ func ParseIndex(f *os.File) []Location {
 
 
 	return locations
+}
+
+func ParseIndexLine(f *os.File) Location {
+	location := Location{}
+	keylenbytes := make([]byte, 4)
+	_, err := f.Read(keylenbytes)
+	if err == io.EOF {
+		return location
+	}
+	location.keylenght = int(binary.LittleEndian.Uint32(keylenbytes))
+
+	keybytes := make([]byte, location.keylenght)
+	_, _ = f.Read(keybytes)
+	location.key = string(keybytes)
+
+	locationbytes := make([]byte, 8)
+	_, _ = f.Read(locationbytes)
+	location.value = int(binary.LittleEndian.Uint64(locationbytes))
+	return location
+
 }
 
 func ParseSummary(f *os.File) Summary {
