@@ -22,8 +22,10 @@ func (b1 *BloomFilter) CreateBitSet() {
 func (b1 *BloomFilter) AddElement(element string) {
 
 	for j := 0; j < len(b1.HashFunctions); j++ {
+		b1.HashFunctions[j].Reset()
 		b1.HashFunctions[j].Write([]byte(element))
 		i := b1.HashFunctions[j].Sum32() % uint32(b1.M)
+		b1.HashFunctions[j].Reset()
 		b1.BitSet[i] = 1
 	}
 

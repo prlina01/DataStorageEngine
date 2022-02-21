@@ -53,16 +53,17 @@ func FindKey(searchKey string) bool {
 	}
 	sort.Ints(keys)
 	for _, k := range keys {
+
 		for _, sstable := range sstables[uint32(k)] {
 
-			f_bloomFilter, err := os.Open(sstable["BloomFilter"])
+			f_bloomFilter, err := os.Open("Data/" + sstable["BloomFilter"])
 			if err!= nil {panic("can't open file!")}
 			bloomFilter := ParseBloom(f_bloomFilter)
 			if !bloomFilter.IsElementInBloomFilter(searchKey) {
 				continue
 			}
 
-			f_summary, err := os.Open(sstable["Summary"])
+			f_summary, err := os.Open("Data/" + sstable["Summary"])
 			if err!= nil {panic("Can't open file!")}
 			indexOffsetNeeded := 0
 			summary := ParseSummary(f_summary)
@@ -75,22 +76,24 @@ func FindKey(searchKey string) bool {
 				if indexOffsetNeeded == 0 { continue }
 			} else { continue }
 
-			f_index, err := os.Open(sstable["Index"])
+			f_index, err := os.Open("Data/" + sstable["Index"])
 			if err!= nil {panic("Can't open file!")}
-			f_index.Seek(int64(indexOffsetNeeded),1)
+			f_index.Seek(int64(indexOffsetNeeded),0)
+			//ParseIndex(f_index, searchKey)
 			indexLine := ParseIndexLine(f_index)
 			dataOffsetNeeded := indexLine.value
 
 
 
-			f_data, err := os.Open(sstable["Sstable"])
+			f_data, err := os.Open("Data/" + sstable["Sstable"])
 			if err!= nil {panic("Can't open file!")}
-			f_data.Seek(int64(dataOffsetNeeded), 1)
+			f_data.Seek(int64(dataOffsetNeeded), 0)
 			dataLine, err := WriteAheadLog.ParseLine(f_data)
 			if err!= nil {panic("Can't read from file!")}
 			if dataLine.Key == searchKey {
-				fmt.Println("Key has been found, It's value is " + string(dataLine.Value))
-				return true
+				fmt.Print("Key has been found, It's value is ")
+				fmt.Println(dataLine.Value)
+				//return true
 			}
 		}
 	}
@@ -100,7 +103,21 @@ func FindKey(searchKey string) bool {
 
 func GetKeyDataStructure() map[uint32][]map[string]string {
 	fileNames := Utils.Find(".*Sstable.*")
-	var sstables map[uint32][]map[string]string
+	sort.Slice(fileNames, func(i, j int) bool {
+		firstSplit := strings.Split(fileNames[i], ".")[0]
+		secondSplit := strings.Split(firstSplit, "-")
+
+		firstSplit2 := strings.Split(fileNames[j], ".")[0]
+		secondSplit2 := strings.Split(firstSplit2, "-")
+
+
+		identifier_mul, _ := strconv.Atoi(secondSplit[2])
+		identifier_mul2, _ := strconv.Atoi(secondSplit2[2])
+
+		return identifier_mul > identifier_mul2
+	})
+	//var sstables map[uint32][]map[string]string
+	sstables := make(map[uint32][]map[string]string)
 	for _, fileName := range fileNames {
 		firstSplit := strings.Split(fileName, ".")[0]
 		secondSplit := strings.Split(firstSplit, "-")
@@ -108,7 +125,7 @@ func GetKeyDataStructure() map[uint32][]map[string]string {
 		identifier_mul, err := strconv.Atoi(secondSplit[0])
 		if err!= nil {panic("Can't convert value!")}
 
-		var connectedFilesMap map[string]string
+		connectedFilesMap := make(map[string]string)
 
 		connectedFiles := Utils.Find(".*"+secondSplit[2])
 		for _, connectedFile := range connectedFiles {
@@ -138,17 +155,17 @@ func  DeleteSSTableAndConnectedParts(path string) {
 		sliced := strings.Split(file.Name(), ".")
 		identifier_other := strings.Split(sliced[0], "-")[2]
 		if identifier == identifier_other {
-			e:= os.Remove(file.Name())
+			e:= os.Remove("Data/" + file.Name())
 			if e!= nil {
 				panic("Can't delete file")
 			}
 		}
 
 	}
-	e:= os.Remove(path)
-	if e!= nil {
-		panic("Can't delete file")
-	}
+	//e:= os.Remove(path)
+	//if e!= nil {
+	//	panic("Can't delete file")
+	//}
 
 }
 
@@ -192,15 +209,14 @@ func Compaction() {
 
 		lines := []WriteAheadLog.Line{}
 
-		f1, _ := os.Open(fileNames[0])
-		f2, _ := os.Open(fileNames[1])
+		f1, _ := os.Open("Data/" + fileNames[0])
+		f2, _ := os.Open("Data/" + fileNames[1])
 		sst := Sstable{}
-		// TODO rastaviti na dva zbog config.MaxLsmNodesFirstLevel
 		if level <= 1 {
 			for i:=1; i < config.MaxLsmNodesFirstLevel; i++ {
 				if i >= 2 {
 					f1, _ = os.Open(sst.Identifier)
-					f2, _ = os.Open(fileNames[i])
+					f2, _ = os.Open("Data/" + fileNames[i])
 				}
 
 				for {
@@ -341,6 +357,7 @@ func Compaction() {
 
 
 func serializeindex(loc Location) []byte {
+	//summaryloc = Location{dline.Key, len(indexbytes) - int(currentks) - 12, len(dline.Key)}
 	var allbytes []byte
 	keylenbytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(keylenbytes, uint32(len(loc.key)))
@@ -353,7 +370,7 @@ func serializeindex(loc Location) []byte {
 	return allbytes
 }
 
-func ParseIndex(f *os.File) []Location {
+func ParseIndex(f *os.File, key string) []Location {
 	locations := []Location{}
 
 	for {
@@ -368,7 +385,10 @@ func ParseIndex(f *os.File) []Location {
 		keybytes := make([]byte, location.keylenght)
 		_, _ = f.Read(keybytes)
 		location.key = string(keybytes)
-
+		if location.key == key {
+			currentPos, _ := f.Seek(0, 1)
+			fmt.Println(currentPos)
+		}
 		locationbytes := make([]byte, 8)
 		_, _ = f.Read(locationbytes)
 		location.value = int(binary.LittleEndian.Uint64(locationbytes))
@@ -380,6 +400,9 @@ func ParseIndex(f *os.File) []Location {
 }
 
 func ParseIndexLine(f *os.File) Location {
+	//allbytes = append(allbytes, keylenbytes...)
+	//allbytes = append(allbytes, keybytes...)
+	//allbytes = append(allbytes, locationbytes...)
 	location := Location{}
 	keylenbytes := make([]byte, 4)
 	_, err := f.Read(keylenbytes)
@@ -544,24 +567,37 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line, lsmLevel int) {
 		}
 	}(f)
 
-	_, err = f.Readdirnames(1)
-	if err == io.EOF {
-		sst.WriteData(1 ,1)
-		return
-	}
+	//_, err = f.Readdirnames(1)
+	//if err == io.EOF {
+	//	sst.WriteData(1 ,1)
+	//	return
+	//}
 	files, err := ioutil.ReadDir("Data/")
 	if err != nil {
 		log.Fatal(err)
 	}
 	var intval int
+	var intvals []int
 	for _, file := range files {
 		if strings.Contains(file.Name(), "Sstable") {
 			sliced := strings.Split(file.Name(), ".")
 			sliced2 := strings.Split(sliced[0], "Sstable-")
 			intval, _ = strconv.Atoi(sliced2[1])
+			intvals = append(intvals, intval)
+
 		}
 	}
-	sst.WriteData(intval + 1, lsmLevel)
+	max := 0
+	if len(intvals) > 0 {
+		max = intvals[0]
+		for _, value := range intvals {
+			if value > max {max = value}
+		}
+	}
+
+
+
+	sst.WriteData(max + 1, lsmLevel)
 }
 func ParseData(f *os.File) []WriteAheadLog.Line {
 	whlLines := []WriteAheadLog.Line{}
@@ -610,10 +646,10 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 		currentks := dline.Keysize
 		currentvs := dline.Valuesize
 		sstablebytes = append(sstablebytes, WriteAheadLog.SerializeLine(dline)...)
-		loc = Location{dline.Key, len(sstablebytes) - int(currentks) - int(currentvs), len(dline.Key)}
+		loc = Location{dline.Key, len(sstablebytes) - int(currentks) - int(currentvs) - 29, len(dline.Key)}
 		sst.Index = append(sst.Index, loc)
 		indexbytes = append(indexbytes, serializeindex(loc)...)
-		summaryloc = Location{dline.Key, len(indexbytes) - int(currentks) - 8, len(dline.Key)}
+		summaryloc = Location{dline.Key, len(indexbytes) - int(currentks) - 12, len(dline.Key)}
 		if line == 0{
 			first = summaryloc
 		}
@@ -628,11 +664,11 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	firstlast = append(firstlast,serializeindex(first)...)
 	firstlast = append(firstlast,serializeindex(last)...)
 	firstlast = append(firstlast,summarybytes...)
-	file, _ := os.OpenFile(filename, os.O_APPEND, 0777)
-	file1, _ := os.OpenFile(filename1, os.O_APPEND, 0777)
-	file2, _ := os.OpenFile(filename2, os.O_APPEND, 0777)
-	file3, _ := os.OpenFile(filename3, os.O_APPEND, 0777)
-	file5, _ := os.OpenFile(filename5, os.O_APPEND, 0777)
+	file, _ := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY, 0777)
+	file1, _ := os.OpenFile(filename1, os.O_APPEND | os.O_WRONLY, 0777)
+	file2, _ := os.OpenFile(filename2, os.O_APPEND | os.O_WRONLY, 0777)
+	file3, _ := os.OpenFile(filename3, os.O_APPEND | os.O_WRONLY, 0777)
+	file5, _ := os.OpenFile(filename5, os.O_APPEND | os.O_WRONLY, 0777)
 	defer func(file *os.File) {
 		err := file.Close()
 		if err != nil {

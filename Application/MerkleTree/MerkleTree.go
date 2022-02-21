@@ -71,7 +71,7 @@ func (mt *MerkleTree) BuildMT( lines []Node) []Node {
 
 func (mt *MerkleTree) WriteTree(filename string) {
 	_, _ = os.Create(filename)
-	file2,_ := os.OpenFile(filename, os.O_APPEND, 0600)
+	file2,_ := os.OpenFile(filename, os.O_APPEND | os.O_WRONLY, 0777)
 	writeNode(mt.root.root, 0,file2)
 	err := file2.Close()
 	if err != nil {
