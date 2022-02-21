@@ -4,6 +4,7 @@ import (
 	"KeyDataStorage/Application/Cache"
 	"KeyDataStorage/Application/Memtable"
 	"KeyDataStorage/Application/SkipList"
+	"KeyDataStorage/Application/Sstable"
 	"KeyDataStorage/Application/WriteAheadLog"
 	"fmt"
 	yaml "gopkg.in/yaml.v2"
@@ -15,7 +16,7 @@ type Config struct {
 	WalSize      uint64 `yaml:"wal_size"`
 	MemtableSize uint64 `yaml:"memtable_size"`
 	LowWaterMark uint8  `yaml:"low_water_mark"`
-	CacheSize    int    `yaml:"cache_size"`
+	CacheSize       int `yaml:"cache_size"`
 }
 
 func main() {
@@ -32,21 +33,23 @@ func main() {
 	}
 	fmt.Println(string(marshalled))
 	var keys []string
-	keys = append(keys, "dog")
-	keys = append(keys, "man")
+	keys = append(keys, "do4g")
+	keys = append(keys, "ma7n")
 	keys = append(keys, "ggss")
 	keys = append(keys, "xv")
 	keys = append(keys, "zxv")
-	keys = append(keys, "gd")
+	keys = append(keys, "g5d")
 	keys = append(keys, "dg")
-	keys = append(keys, "gasdg")
-	keys = append(keys, "daszx")
-	keys = append(keys, "daszx1")
+	keys = append(keys, "gas6dg")
+	keys = append(keys, "da856szx")
+	keys = append(keys, "das4zx")
 
 	values := make([][]byte, 10)
 	for i := range values {
 		values[i] = make([]byte, 10)
 	}
+	values[0][0] = 95
+	values[0][1] = 94
 
 	cache := Cache.Cache{MaxSize: config.CacheSize}
 	cache.Init()
@@ -66,5 +69,17 @@ func main() {
 	cache.RemoveKey("gasdg")
 	fmt.Println(cache.FindKey("sdds"))
 	cache.PrintAll()
+	Sstable.Compaction()
+
+	//kljuc := "dog"
+	//Sstable.FindKey(kljuc)
+	//if mt.Data.FindElement(kljuc) == nil {
+	//	if cache.FindKey(kljuc) == nil {
+	//		if!(Sstable.FindKey(kljuc)) {
+	//			fmt.Println("Key has not been found!")
+	//		}
+	//	}
+	//}
+
 
 }

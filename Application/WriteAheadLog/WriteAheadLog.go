@@ -45,14 +45,17 @@ type WriteAheadLog struct {
 	LWM     int
 }
 
-func ParseLine(f *os.File) Line {
+func ParseLine(f *os.File) (Line, error) {
 	crc := make([]byte, 4)
 	timestamp := make([]byte, 8)
 	tombstone := make([]byte, 1)
 	keysize := make([]byte, 8)
 	valuesize := make([]byte, 8)
 	line := Line{}
-	_, _ = f.Read(crc)
+	_, err := f.Read(crc)
+	if err!=nil {
+		return line, err
+	}
 	crcint := binary.LittleEndian.Uint32(crc)
 	line.Crc = crcint
 	_, _ = f.Read(timestamp)
@@ -72,7 +75,7 @@ func ParseLine(f *os.File) Line {
 	_, _ = f.Read(value)
 	line.Key = string(key)
 	line.Value = value
-	return line
+	return line, nil
 }
 
 func SerializeLine(line Line) []byte {
@@ -183,7 +186,9 @@ func (wal *WriteAheadLog) readSegment(segment int) []Line {
 	}
 	var data []Line
 	for i := 1; int64(i) <= wal.segment; i++ {
-		data = append(data, ParseLine(f))
+		// TODO MENJANNO OVO AKO JE GRESKA POGLEDAJ KOD DONJE CRTE
+		parseLine, _ := ParseLine(f)
+		data = append(data, parseLine)
 		if errors.Is(err, io.EOF) {
 			return data
 		}
@@ -247,7 +252,7 @@ func (wal *WriteAheadLog) AddKV(key string, value []byte) bool {
 			return false
 		}
 	}
-	myfile, err := os.OpenFile(wal.file, os.O_APPEND, 0777)
+	myfile, err := os.OpenFile(wal.file, os.O_APPEND | os.O_WRONLY, 0777)
 	defer func(myfile *os.File) {
 		err := myfile.Close()
 		if err != nil {
