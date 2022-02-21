@@ -175,12 +175,6 @@ func (wal *WriteAheadLog) readSegment(segment int) []Line {
 	pad := fmt.Sprintf("%04d", segment)
 	filename := "wal/wal-" + pad + ".log"
 	f, err := os.Open(filename)
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-
-		}
-	}(f)
 	if err != nil {
 		panic("err")
 	}
@@ -193,6 +187,10 @@ func (wal *WriteAheadLog) readSegment(segment int) []Line {
 			return data
 		}
 
+	}
+	err = f.Close()
+	if err != nil {
+		return nil
 	}
 	return data
 }
@@ -253,12 +251,6 @@ func (wal *WriteAheadLog) AddKV(key string, value []byte) bool {
 		}
 	}
 	myfile, err := os.OpenFile(wal.file, os.O_APPEND | os.O_WRONLY, 0777)
-	defer func(myfile *os.File) {
-		err := myfile.Close()
-		if err != nil {
-
-		}
-	}(myfile)
 	if err != nil {
 		return false
 	}
@@ -298,6 +290,7 @@ func (wal *WriteAheadLog) AddKV(key string, value []byte) bool {
 	line := Line{chcks, uint64(fulltimestamp), tombstone, keysize, valuesize, key, value}
 	wal.Data = append(wal.Data, line)
 	_, err = myfile.Write(allbytes)
+	err = myfile.Close()
 	if err != nil {
 		return false
 	}

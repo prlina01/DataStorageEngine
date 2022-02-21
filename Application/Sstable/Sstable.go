@@ -93,7 +93,7 @@ func FindKey(searchKey string) bool {
 			if dataLine.Key == searchKey {
 				fmt.Print("Key has been found, It's value is ")
 				fmt.Println(dataLine.Value)
-				//return true
+				return true
 			}
 		}
 	}
@@ -157,15 +157,12 @@ func  DeleteSSTableAndConnectedParts(path string) {
 		if identifier == identifier_other {
 			e:= os.Remove("Data/" + file.Name())
 			if e!= nil {
+				fmt.Println(e)
 				panic("Can't delete file")
 			}
 		}
 
 	}
-	//e:= os.Remove(path)
-	//if e!= nil {
-	//	panic("Can't delete file")
-	//}
 
 }
 
@@ -618,12 +615,37 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	filename3 := "Data/"+ strconv.Itoa(lsmLevel) + "-BloomFilter-" + pad + ".db"
 	filename4 := "Data/"+ strconv.Itoa(lsmLevel) + "-Metadata-" + pad + ".txt"
 	filename5 := "Data/"+ strconv.Itoa(lsmLevel) + "-TOC-" + pad + ".db"
-	_, _ = os.Create(filename)
-	_, _ = os.Create(filename1)
-	_, _ = os.Create(filename2)
-	_, _ = os.Create(filename3)
-	_, _ = os.Create(filename4)
-	_, _ = os.Create(filename5)
+
+	f1, _ := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
+	f2, _ := os.OpenFile(filename1, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
+	f3, _ := os.OpenFile(filename2, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
+	f4, _ := os.OpenFile(filename3, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
+	f5, _ := os.OpenFile(filename4, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
+	f6, _ := os.OpenFile(filename5, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
+	err := f1.Close()
+	if err != nil {
+		return 
+	}
+	err = f2.Close()
+	if err != nil {
+		return 
+	}
+	err = f3.Close()
+	if err != nil {
+		return 
+	}
+	err = f4.Close()
+	if err != nil {
+		return 
+	}
+	err = f5.Close()
+	if err != nil {
+		return 
+	}
+	err = f6.Close()
+	if err != nil {
+		return 
+	}
 	var stringss []string
 	stringss = append(stringss,strings.Split(filename,"Data/")[1]+"\n")
 	stringss = append(stringss,strings.Split(filename1,"Data/")[1]+"\n")
@@ -669,31 +691,7 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	file2, _ := os.OpenFile(filename2, os.O_APPEND | os.O_WRONLY, 0777)
 	file3, _ := os.OpenFile(filename3, os.O_APPEND | os.O_WRONLY, 0777)
 	file5, _ := os.OpenFile(filename5, os.O_APPEND | os.O_WRONLY, 0777)
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-
-		}
-	}(file)
-	defer func(file1 *os.File) {
-		err := file1.Close()
-		if err != nil {
-
-		}
-	}(file1)
-	defer func(file2 *os.File) {
-		err := file2.Close()
-		if err != nil {
-
-		}
-	}(file2)
-	defer func(file3 *os.File) {
-		err := file3.Close()
-		if err != nil {
-
-		}
-	}(file3)
-	_, err := file.Write(sstablebytes)
+	_, err = file.Write(sstablebytes)
 	if err != nil {
 		return
 	}
@@ -718,6 +716,27 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 			return 
 		}
 	}
+	err = file.Close()
+	if err != nil {
+		return 
+	}
+	err = file1.Close()
+	if err != nil {
+		return 
+	}
+	err = file2.Close()
+	if err != nil {
+		return 
+	}
+	err = file3.Close()
+	if err != nil {
+		return 
+	}
+	err = file5.Close()
+	if err != nil {
+		return 
+	}
+
 
 
 }

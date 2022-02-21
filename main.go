@@ -42,14 +42,44 @@ func main() {
 	keys = append(keys, "dg")
 	keys = append(keys, "gas6dg")
 	keys = append(keys, "da856szx")
-	keys = append(keys, "das4zx")
+	keys = append(keys, "das4zx2")
+	keys = append(keys, "do4g4")
+	keys = append(keys, "ma7n15")
+	keys = append(keys, "ggss6")
+	keys = append(keys, "xv42")
+	keys = append(keys, "zxv35")
+	keys = append(keys, "g5dgzx")
+	keys = append(keys, "dghfd")
+	keys = append(keys, "gas6dgvch")
+	keys = append(keys, "da856szxdsh")
+	keys = append(keys, "das4zxhdf")
+	keys = append(keys, "do4gcxvh")
+	keys = append(keys, "ma7nhdfx")
+	keys = append(keys, "ggsshxdf")
+	keys = append(keys, "xvhdxfh")
+	keys = append(keys, "zxvhxdfhh")
+	keys = append(keys, "g5dhfhfhfh")
+	keys = append(keys, "dgvvvvx")
+	keys = append(keys, "gas6dghfdhdfh")
+	keys = append(keys, "da856szxhvhvvvh")
+	keys = append(keys, "das4zxxdfhdfxdfxh")
+	keys = append(keys, "do4gcxvh1")
+	keys = append(keys, "ma7nhdfx2")
+	keys = append(keys, "ggsshxdf4")
+	keys = append(keys, "xvhdxfh5")
+	keys = append(keys, "zxvhxdfh66")
+	keys = append(keys, "g5dhfhfhfh6")
+	keys = append(keys, "dgvvvvx6")
+	keys = append(keys, "gas6dghfdhdfh72")
+	keys = append(keys, "da856szxhvhvvvh11")
+	keys = append(keys, "das4zxxdfhdfxdfxh33")
 
-	values := make([][]byte, 10)
+	values := make([][]byte, 40)
 	for i := range values {
 		values[i] = make([]byte, 10)
 	}
-	values[0][0] = 95
-	values[0][1] = 94
+	values[30][0] = 95
+	values[30][1] = 94
 
 	cache := Cache.Cache{MaxSize: config.CacheSize}
 	cache.Init()
@@ -64,22 +94,17 @@ func main() {
 		cache.AddKV(keys[i], values[i])
 		mt.Insert(keys[i], values[i])
 	}
-	fmt.Println(cache.FindKey("xv"))
-	fmt.Println(cache.FindKey("sdds"))
-	cache.RemoveKey("gasdg")
-	fmt.Println(cache.FindKey("sdds"))
-	cache.PrintAll()
 	Sstable.Compaction()
 
-	//kljuc := "dog"
-	//Sstable.FindKey(kljuc)
-	//if mt.Data.FindElement(kljuc) == nil {
-	//	if cache.FindKey(kljuc) == nil {
-	//		if!(Sstable.FindKey(kljuc)) {
-	//			fmt.Println("Key has not been found!")
-	//		}
-	//	}
-	//}
+	kljuc := "do4gcxvh1"
+	Sstable.FindKey(kljuc)
+	if mt.Data.FindElement(kljuc) == nil {
+		if cache.FindKey(kljuc) == nil {
+			if!(Sstable.FindKey(kljuc)) {
+				fmt.Println("Key has not been found!")
+			}
+		}
+	}
 
 
 }
