@@ -1,7 +1,17 @@
-Implementation of segmented WriteAheadLog with low watermark removal
+# Data Storage Engine  
+  
+## Default project configuration  
 
-*Segment size in number of lines
-*Key-Value addition
-*Low watermark removal
-*Individual segment reading
-
+```wal_size: 10  
+memtable_size: 3  
+low_water_mark: 1  
+cache_size: 5  
+max_lsm_tree_level: 4  
+max_lsm_nodes_first_level: 4  
+max_lsm_nodes_other_levels: 2  
+false_positive_rate: 0.05  
+hll_precision: 4  
+max_tokens: 5  
+token_bucket_interval: 60  
+cms_delta: 0.01  
+cms_epsilon: 0.01  
