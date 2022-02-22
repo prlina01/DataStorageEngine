@@ -45,14 +45,17 @@ type WriteAheadLog struct {
 	LWM     int
 }
 
-func ParseLine(f *os.File) Line {
+func ParseLine(f *os.File) (Line, error) {
 	crc := make([]byte, 4)
 	timestamp := make([]byte, 8)
 	tombstone := make([]byte, 1)
 	keysize := make([]byte, 8)
 	valuesize := make([]byte, 8)
 	line := Line{}
-	_, _ = f.Read(crc)
+	_, err := f.Read(crc)
+	if err!=nil {
+		return line, err
+	}
 	crcint := binary.LittleEndian.Uint32(crc)
 	line.Crc = crcint
 	_, _ = f.Read(timestamp)
@@ -72,7 +75,7 @@ func ParseLine(f *os.File) Line {
 	_, _ = f.Read(value)
 	line.Key = string(key)
 	line.Value = value
-	return line
+	return line, nil
 }
 
 func SerializeLine(line Line) []byte {
@@ -90,7 +93,7 @@ func SerializeLine(line Line) []byte {
 	fulltimestampbytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(fulltimestampbytes, fulltimestamp)
 
-	tombstone := byte(0)
+	tombstone := byte(int(line.Tombstone))
 
 	keysize := uint64(len(line.Key))
 	keysizebytes := make([]byte, 8)
@@ -172,22 +175,21 @@ func (wal *WriteAheadLog) readSegment(segment int) []Line {
 	pad := fmt.Sprintf("%04d", segment)
 	filename := "wal/wal-" + pad + ".log"
 	f, err := os.Open(filename)
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-
-		}
-	}(f)
 	if err != nil {
 		panic("err")
 	}
 	var data []Line
 	for i := 1; int64(i) <= wal.segment; i++ {
-		data = append(data, ParseLine(f))
+		parseLine, err := ParseLine(f)
+		data = append(data, parseLine)
 		if errors.Is(err, io.EOF) {
 			return data
 		}
 
+	}
+	err = f.Close()
+	if err != nil {
+		return nil
 	}
 	return data
 }
@@ -230,7 +232,7 @@ func (wal *WriteAheadLog) LowWaterMarkRemoval() {
 	}
 }
 
-func (wal *WriteAheadLog) AddKV(key string, value []byte) bool {
+func (wal *WriteAheadLog) AddKV(key string, value []byte, ) bool {
 	if int64(len(wal.Data)) >= wal.segment {
 		i := wal.segLoc[len(wal.segLoc)-1] + 1
 		wal.segLoc = append(wal.segLoc, i)
@@ -247,13 +249,7 @@ func (wal *WriteAheadLog) AddKV(key string, value []byte) bool {
 			return false
 		}
 	}
-	myfile, err := os.OpenFile(wal.file, os.O_APPEND, 0777)
-	defer func(myfile *os.File) {
-		err := myfile.Close()
-		if err != nil {
-
-		}
-	}(myfile)
+	myfile, err := os.OpenFile(wal.file, os.O_APPEND | os.O_WRONLY, 0777)
 	if err != nil {
 		return false
 	}
@@ -293,6 +289,7 @@ func (wal *WriteAheadLog) AddKV(key string, value []byte) bool {
 	line := Line{chcks, uint64(fulltimestamp), tombstone, keysize, valuesize, key, value}
 	wal.Data = append(wal.Data, line)
 	_, err = myfile.Write(allbytes)
+	err = myfile.Close()
 	if err != nil {
 		return false
 	}

@@ -2,7 +2,6 @@ package SkipList
 
 import (
 	"KeyDataStorage/Application/WriteAheadLog"
-	"fmt"
 	"math/rand"
 	"time"
 )
@@ -88,7 +87,7 @@ func (s *SkipList) FindElement(key string)  *SkipListNode {
 	}
 
 }
-func (s *SkipList) InsertNode(key string,value []byte) {
+func (s *SkipList) InsertNode(key string,value []byte,ts int) {
 	update := make([]*SkipListNode,s.maxHeight)
 	x := s.head
 	for i:=s.height; i >= 0;i--{
@@ -111,7 +110,7 @@ func (s *SkipList) InsertNode(key string,value []byte) {
 		chcks := WriteAheadLog.CRC32(mybytes)
 		t := time.Now().Unix()
 		fulltimestamp := uint(t)
-		tombstone := byte(0)
+		tombstone := byte(ts)
 		keysize := uint64(len(key))
 		valuesize := uint64(len(value))
 		var line WriteAheadLog.Line;
@@ -134,7 +133,7 @@ func (s *SkipList) InsertNode(key string,value []byte) {
 		chcks := WriteAheadLog.CRC32(mybytes)
 		t:= time.Now().Unix()
 		fulltimestamp := uint(t)
-		tombstone := byte(0)
+		tombstone := byte(ts)
 		keysize := uint64(len(key))
 		valuesize := uint64(len(value))
 		var line WriteAheadLog.Line;
@@ -149,20 +148,20 @@ func (s *SkipList) InsertNode(key string,value []byte) {
 		return
 	}
 }
-func (s *SkipList) DeleteNode(key string){
-	update := make([]*SkipListNode,s.maxHeight)
+func (s *SkipList) DeleteNode(key string,value []byte) {
+	update := make([]*SkipListNode, s.maxHeight)
 	x := s.head
-	for i:=s.height; i >= 0;i--{
-		for ;x.Next[i]!=nil && x.Next[i].Line.Key < key;{
+	for i := s.height; i >= 0; i-- {
+		for ; x.Next[i] != nil && x.Next[i].Line.Key < key; {
 			x = x.Next[i]
 		}
 		update[i] = x
 	}
 	x = x.Next[0]
-	if x == s.FindElement(x.Line.Key){
+	if x == s.FindElement(key) {
 		x.Line.Tombstone = 1
-		}
-		fmt.Println("removed key",key)
+	}else{
+		s.InsertNode(key,value,1)}
 	}
 
 
@@ -177,19 +176,4 @@ func (s *SkipList) roll() int {
 		}
 	}
 	return level
-}
-
-func main() {
-	s := SkipList{20,0,0,nil}
-	s.CreateSL()
-	s.InsertNode("dog",make([]byte,10))
-	s.InsertNode("cat",make([]byte,10))
-	fmt.Println(s.FindElement("do"))
-	fmt.Println(s.FindElement("dog"))
-	s.InsertNode("dog",make([]byte,30))
-	fmt.Println(s.FindElement("dog"))
-	fmt.Println(s.FindElement("cat"))
-	s.DeleteNode("dog")
-	fmt.Println(s.FindElement("dog"))
-
 }

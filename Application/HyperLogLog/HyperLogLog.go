@@ -1,10 +1,12 @@
-package main
+package HyperLogLog
 
 import (
 	"encoding/binary"
 	"hash/fnv"
+	"io"
 	"math"
 	"math/bits"
+	"os"
 
 	//"crypto/md5"
 )
@@ -59,13 +61,13 @@ func hashFunc(element string) uint32{
 
 
 
-func (hll *HLL) create_array (p uint8){
+func (hll *HLL) Create_array(p uint8){
 	hll.p = p
 	hll.m = uint64(math.Pow(2, float64(p)))
 	hll.reg = make([]uint8, hll.m)
 }
 
-func (hll *HLL) add_element (element string){
+func (hll *HLL) Add_element(element string){
 	var k = hashFunc(element)
 
 	var mask uint32 = 0
@@ -94,4 +96,28 @@ func (hll *HLL) Serialize() []byte{
 		allbytes = append(allbytes, elem...)
 	}
 	return allbytes
+}
+
+func ParseHLL(f *os.File) HLL {
+	hll := HLL{};
+	var bit_set []uint8
+	mbytes := make([]byte, 8)
+	_, _ = f.Read(mbytes)
+	hll.m = binary.LittleEndian.Uint64(mbytes)
+	kbytes := make([]byte, 4)
+	_, _ = f.Read(kbytes)
+	hll.p = uint8(binary.LittleEndian.Uint32(kbytes))
+	for {
+		element_of_bit_set := make([]byte, 4)
+		_, err := f.Read(element_of_bit_set)
+		if err == io.EOF {
+			break
+		}
+		int_element_of_bit_set := binary.LittleEndian.Uint32(element_of_bit_set)
+		bit_set = append(bit_set, uint8(int_element_of_bit_set))
+	}
+
+	hll.reg = bit_set
+
+	return hll
 }
