@@ -11,6 +11,9 @@ type MemTable struct {
 	Size uint64
 	Data *SkipList.SkipList
 	Wal  *WriteAheadLog.WriteAheadLog
+	MaxLsmTreeLevel int
+	MaxLsmNodesFirstLevel int
+	MaxLsmNodesOtherLevels int
 	FalsePRate   float64
 	HLLPrecision uint8
 }
@@ -56,7 +59,7 @@ func (memtable *MemTable) Flush() {
 		return
 	}
 	if answer == "1" {
-		Sstable.Compaction()
+		Sstable.Compaction(memtable.FalsePRate,memtable.HLLPrecision,memtable.MaxLsmTreeLevel,memtable.MaxLsmNodesFirstLevel,memtable.MaxLsmNodesOtherLevels)
 	}
 }
 

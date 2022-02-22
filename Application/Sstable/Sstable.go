@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/spaolacci/murmur3"
-	"gopkg.in/yaml.v2"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -54,7 +53,7 @@ type Sstable struct {
 func FindKey(searchKey string) []byte {
 	sstables := GetKeyDataStructure()
 	keys := make([]int, 0)
-	for k, _ := range sstables {
+	for k := range sstables {
 		keys = append(keys, int(k))
 	}
 	sort.Ints(keys)
@@ -62,24 +61,27 @@ func FindKey(searchKey string) []byte {
 
 		for _, sstable := range sstables[uint32(k)] {
 
-			f_bloomFilter, err := os.Open("Data/" + sstable["BloomFilter"])
-			bloomFilter := ParseBloom(f_bloomFilter)
+			fBloomfilter, err := os.Open("Data/" + sstable["BloomFilter"])
+			bloomFilter := ParseBloom(fBloomfilter)
 			if !bloomFilter.IsElementInBloomFilter(searchKey) {
+				err = fBloomfilter.Close()
 				continue
 			}
-			err = f_bloomFilter.Close()
+			err = fBloomfilter.Close()
 			if err != nil {
 				return nil
 			}
-
-			f_summary, err := os.Open("Data/" + sstable["Summary"])
+			if err != nil {
+				return nil
+			}
+			fSummary, err := os.Open("Data/" + sstable["Summary"])
 			if err != nil {
 				return nil
 			}
 			if err!= nil {panic("Can't open file!")}
 			indexOffsetNeeded := 0
-			summary := ParseSummary(f_summary)
-			err = f_summary.Close()
+			summary := ParseSummary(fSummary)
+			err = fSummary.Close()
 			if err != nil {
 				return nil
 			}
@@ -92,12 +94,12 @@ func FindKey(searchKey string) []byte {
 				if indexOffsetNeeded == 0 { continue }
 			} else { continue }
 
-			f_index, err := os.Open("Data/" + sstable["Index"])
+			fIndex, err := os.Open("Data/" + sstable["Index"])
 			if err!= nil {panic("Can't open file!")}
-			f_index.Seek(int64(indexOffsetNeeded),0)
+			_, _ = fIndex.Seek(int64(indexOffsetNeeded), 0)
 			//ParseIndex(f_index, searchKey)
-			indexLine := ParseIndexLine(f_index)
-			err = f_index.Close()
+			indexLine := ParseIndexLine(fIndex)
+			err = fIndex.Close()
 			if err != nil {
 				return nil
 			}
@@ -105,11 +107,11 @@ func FindKey(searchKey string) []byte {
 
 
 
-			f_data, err := os.Open("Data/" + sstable["Sstable"])
+			fData, err := os.Open("Data/" + sstable["Sstable"])
 			if err!= nil {panic("Can't open file!")}
-			f_data.Seek(int64(dataOffsetNeeded), 0)
-			dataLine, err := WriteAheadLog.ParseLine(f_data)
-			err = f_data.Close()
+			_, _ = fData.Seek(int64(dataOffsetNeeded), 0)
+			dataLine, err := WriteAheadLog.ParseLine(fData)
+			err = fData.Close()
 			if err != nil {
 				return nil
 			}
@@ -132,10 +134,10 @@ func GetKeyDataStructure() map[uint32][]map[string]string {
 		secondSplit2 := strings.Split(firstSplit2, "-")
 
 
-		identifier_mul, _ := strconv.Atoi(secondSplit[2])
-		identifier_mul2, _ := strconv.Atoi(secondSplit2[2])
+		identifierMul, _ := strconv.Atoi(secondSplit[2])
+		identifierMul2, _ := strconv.Atoi(secondSplit2[2])
 
-		return identifier_mul > identifier_mul2
+		return identifierMul > identifierMul2
 	})
 	//var sstables map[uint32][]map[string]string
 	sstables := make(map[uint32][]map[string]string)
@@ -143,7 +145,7 @@ func GetKeyDataStructure() map[uint32][]map[string]string {
 		firstSplit := strings.Split(fileName, ".")[0]
 		secondSplit := strings.Split(firstSplit, "-")
 
-		identifier_mul, err := strconv.Atoi(secondSplit[0])
+		identifierMul, err := strconv.Atoi(secondSplit[0])
 		if err!= nil {panic("Can't convert value!")}
 
 		connectedFilesMap := make(map[string]string)
@@ -161,23 +163,23 @@ func GetKeyDataStructure() map[uint32][]map[string]string {
 				connectedFilesMap["HyperLogLog"] = connectedFile
 			}
 		}
-		sstables[uint32(identifier_mul)] = append(sstables[uint32(identifier_mul)], connectedFilesMap)
+		sstables[uint32(identifierMul)] = append(sstables[uint32(identifierMul)], connectedFilesMap)
 	}
 	return sstables
 }
 
 func  DeleteSSTableAndConnectedParts(path string) {
-	identifier_mul := strings.Split(path, ".")
-	identifier_mul = strings.Split(identifier_mul[0], "-")
-	identifier := identifier_mul[2]
+	identifierMul := strings.Split(path, ".")
+	identifierMul = strings.Split(identifierMul[0], "-")
+	identifier := identifierMul[2]
 	files, err := ioutil.ReadDir("Data/")
 	if err != nil {
 		log.Fatal(err)
 	}
 	for _, file := range files {
 		sliced := strings.Split(file.Name(), ".")
-		identifier_other := strings.Split(sliced[0], "-")[2]
-		if identifier == identifier_other {
+		identifierOther := strings.Split(sliced[0], "-")[2]
+		if identifier == identifierOther {
 			e:= os.Remove("Data/" + file.Name())
 			if e!= nil {
 				fmt.Println(e)
@@ -189,18 +191,10 @@ func  DeleteSSTableAndConnectedParts(path string) {
 
 }
 
-func Compaction() {
-	var config LsmTreeConfig
-	configData, err := ioutil.ReadFile("config.yml")
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = yaml.Unmarshal(configData, &config)
-	if err != nil {
-		log.Fatal(err)
-	}
+func Compaction(FalsePRate   float64, HLLPrecision uint8,  MaxLsmTreeLevel int, MaxLsmNodesFirstLevel int, MaxLsmNodesOtherLevels int){
+
 	level := 1
-	for level < config.MaxLsmTreeLevel {
+	for level < MaxLsmTreeLevel {
 		fileNames := Utils.Find(strconv.Itoa(level)+".*Sstable.*")
 
 		if len(fileNames) == 0 {
@@ -216,7 +210,7 @@ func Compaction() {
 				return
 			}
 
-			if len(fileNames) < config.MaxLsmNodesFirstLevel {
+			if len(fileNames) < MaxLsmNodesFirstLevel {
 				fmt.Println("Not enough SStables for compaction, try again later.")
 				return
 			}
@@ -224,16 +218,15 @@ func Compaction() {
 		}
 
 		// izlazak
-		if level > 1 && len(fileNames) < config.MaxLsmNodesOtherLevels {return}
+		if level > 1 && len(fileNames) < MaxLsmNodesOtherLevels {return}
 
-
-		lines := []WriteAheadLog.Line{}
+		var lines []WriteAheadLog.Line
 
 		f1, _ := os.Open("Data/" + fileNames[0])
 		f2, _ := os.Open("Data/" + fileNames[1])
-		sst := Sstable{}
+		sst := Sstable{FalsePRate: FalsePRate, HLLPrecision:HLLPrecision}
 		if level <= 1 {
-			for i:=1; i < config.MaxLsmNodesFirstLevel; i++ {
+			for i:=1; i < MaxLsmNodesFirstLevel; i++ {
 				if i >= 2 {
 					f1, _ = os.Open(sst.Identifier)
 					f2, _ = os.Open("Data/" + fileNames[i])
@@ -253,10 +246,13 @@ func Compaction() {
 
 					if line1.Key < line2.Key {
 						lines = append(lines, line1)
-						f2.Seek(-29-int64(line2.Keysize)-int64(line2.Valuesize), 1)
+						_, _ = f2.Seek(-29-int64(line2.Keysize)-int64(line2.Valuesize), 1)
 					} else if line2.Key < line1.Key {
 						lines = append(lines, line2)
-						f1.Seek(-29-int64(line1.Keysize)-int64(line1.Valuesize), 1)
+						_, err := f1.Seek(-29-int64(line1.Keysize)-int64(line1.Valuesize), 1)
+						if err != nil {
+							return 
+						}
 					} else if line1.Key == line2.Key {
 						if line1.Tombstone == 1 && line2.Tombstone == 1 {
 							fmt.Println(line1.Key + " has been deleted!")
@@ -291,13 +287,13 @@ func Compaction() {
 				DeleteSSTableAndConnectedParts(f1.Name())
 				DeleteSSTableAndConnectedParts(f2.Name())
 
-				sst = Sstable{FalsePRate: config.FalsePRate, HLLPrecision:config.HLLPrecision}
+				sst = Sstable{FalsePRate: FalsePRate, HLLPrecision:HLLPrecision}
 				sst.Init(lines, level)
 				lines = []WriteAheadLog.Line{}
 
 			}
 		} else {
-			for i:=1; i < config.MaxLsmNodesOtherLevels; i++ {
+			for i:=1; i < MaxLsmNodesOtherLevels; i++ {
 				if i >= 2 {
 					f1, _ = os.Open(sst.Identifier)
 					f2, _ = os.Open(fileNames[i])
@@ -317,10 +313,10 @@ func Compaction() {
 
 					if line1.Key < line2.Key {
 						lines = append(lines, line1)
-						f2.Seek(-29-int64(line2.Keysize)-int64(line2.Valuesize), 1)
+						_, _ = f2.Seek(-29-int64(line2.Keysize)-int64(line2.Valuesize), 1)
 					} else if line2.Key < line1.Key {
 						lines = append(lines, line2)
-						f1.Seek(-29-int64(line1.Keysize)-int64(line1.Valuesize), 1)
+						_, _ = f1.Seek(-29-int64(line1.Keysize)-int64(line1.Valuesize), 1)
 					} else if line1.Key == line2.Key {
 						if line1.Tombstone == 1 && line2.Tombstone == 1 {
 							fmt.Println(line1.Key + " has been deleted!")
@@ -355,7 +351,7 @@ func Compaction() {
 				DeleteSSTableAndConnectedParts(f1.Name())
 				DeleteSSTableAndConnectedParts(f2.Name())
 
-				sst = Sstable{FalsePRate: config.FalsePRate, HLLPrecision:config.HLLPrecision}
+				sst = Sstable{FalsePRate: FalsePRate, HLLPrecision:HLLPrecision}
 				sst.Init(lines, level)
 				lines = []WriteAheadLog.Line{}
 
@@ -363,10 +359,10 @@ func Compaction() {
 		}
 
 
-		new_level_sst := Sstable{FalsePRate: config.FalsePRate, HLLPrecision:config.HLLPrecision}
+		newLevelSst := Sstable{FalsePRate: FalsePRate, HLLPrecision:HLLPrecision}
 
 		DeleteSSTableAndConnectedParts(sst.Identifier)
-		new_level_sst.Init(sst.Data, level + 1)
+		newLevelSst.Init(sst.Data, level + 1)
 
 
 		level += 1
@@ -391,7 +387,7 @@ func serializeindex(loc Location) []byte {
 }
 
 func ParseIndex(f *os.File, key string) []Location {
-	locations := []Location{}
+	var locations []Location
 
 	for {
 		location := Location{}
@@ -444,7 +440,7 @@ func ParseIndexLine(f *os.File) Location {
 
 func ParseSummary(f *os.File) Summary {
 	summary := Summary{}
-	indexes := []Location{}
+	var indexes []Location
 	firstline := Location{}
 	lastline := Location{}
 	keylenbytes := make([]byte, 4)
@@ -501,7 +497,7 @@ func ParseSummary(f *os.File) Summary {
 
 func ParseBloom(f *os.File) BloomFilter.BloomFilter {
 	bloom := BloomFilter.BloomFilter{}
-	var bit_set []int
+	var bitSet []int
 	mbytes := make([]byte, 8)
 	_, _ = f.Read(mbytes)
 	bloom.M = uint(binary.LittleEndian.Uint64(mbytes))
@@ -509,12 +505,12 @@ func ParseBloom(f *os.File) BloomFilter.BloomFilter {
 	_, _ = f.Read(kbytes)
 	bloom.K = uint(binary.LittleEndian.Uint64(kbytes))
 
-	h := []hash.Hash32{}
+	var h []hash.Hash32
 	//ts := uint(time.Now().Unix())
 
 	hashConfigBytes := make([]byte, 4)
 	_, _ = f.Read(hashConfigBytes)
-	bloom.HashFunctionsConfig = uint32(binary.LittleEndian.Uint32(hashConfigBytes))
+	bloom.HashFunctionsConfig = binary.LittleEndian.Uint32(hashConfigBytes)
 
 	for i := uint(0); i < bloom.K; i++ {
 		h = append(h, murmur3.New32WithSeed(bloom.HashFunctionsConfig+uint32(i)))
@@ -522,16 +518,16 @@ func ParseBloom(f *os.File) BloomFilter.BloomFilter {
 	bloom.HashFunctions = h
 
 	for {
-		element_of_bit_set := make([]byte, 4)
-		_, err := f.Read(element_of_bit_set)
+		elementOfBitSet := make([]byte, 4)
+		_, err := f.Read(elementOfBitSet)
 		if err == io.EOF {
 			break
 		}
-		int_element_of_bit_set := binary.LittleEndian.Uint32(element_of_bit_set)
-		bit_set = append(bit_set, int(int_element_of_bit_set))
+		intElementOfBitSet := binary.LittleEndian.Uint32(elementOfBitSet)
+		bitSet = append(bitSet, int(intElementOfBitSet))
 	}
 
-	bloom.BitSet = bit_set
+	bloom.BitSet = bitSet
 
 	return bloom
 }
@@ -546,9 +542,9 @@ func serializeBloom(filter BloomFilter.BloomFilter) []byte {
 	allbytes = append(allbytes, kbytes...)
 
 	hashConfiguration := filter.HashFunctionsConfig
-	elem_hash := make([]byte, 4)
-	binary.LittleEndian.PutUint32(elem_hash, uint32(hashConfiguration))
-	allbytes = append(allbytes, elem_hash...)
+	elemHash := make([]byte, 4)
+	binary.LittleEndian.PutUint32(elemHash, hashConfiguration)
+	allbytes = append(allbytes, elemHash...)
 
 	set := filter.BitSet
 	for line := range set {
@@ -582,12 +578,10 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line, lsmLevel int) {
 			return
 		}
 	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-
-		}
-	}(f)
+	err = f.Close()
+	if err != nil {
+		return
+	}
 
 	//_, err = f.Readdirnames(1)
 	//if err == io.EOF {
@@ -622,7 +616,7 @@ func (sst *Sstable) Init(data []WriteAheadLog.Line, lsmLevel int) {
 	sst.WriteData(max + 1, lsmLevel)
 }
 func ParseData(f *os.File) []WriteAheadLog.Line {
-	whlLines := []WriteAheadLog.Line{}
+	var whlLines []WriteAheadLog.Line
 	parsedLine, _ := WriteAheadLog.ParseLine(f)
 	whlLines = append(whlLines, parsedLine )
 
@@ -749,7 +743,7 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	mt := MerkleTree.MerkleTree{}
 	mt.BuildMT(MerkleTree.CreateNodes(sst.Data))
 	mt.WriteTree(filename4)
-	for line:=range(stringss){
+	for line:=range stringss {
 		_, err := file5.WriteString(stringss[line])
 		if err != nil {
 			return 

@@ -47,7 +47,7 @@ func (s *SkipList) CreateSL() {
 
 	value := make([]byte,10)
 	valuesize := uint64(len(value))
-	var line WriteAheadLog.Line;
+	var line WriteAheadLog.Line
 	line.Crc = chcks
 	line.Value = value
 	line.Timestamp = uint64(fulltimestamp)
@@ -100,7 +100,7 @@ func (s *SkipList) InsertNode(key string,value []byte,ts int) {
 	if x == nil || key != x.Line.Key {
 		s.size += 1
 		level := s.roll()
-		if (level > s.height) {
+		if level > s.height {
 			for i := s.height + 1; i <= level; i++ {
 				update[i] = s.head
 			}
@@ -113,7 +113,7 @@ func (s *SkipList) InsertNode(key string,value []byte,ts int) {
 		tombstone := byte(ts)
 		keysize := uint64(len(key))
 		valuesize := uint64(len(value))
-		var line WriteAheadLog.Line;
+		var line WriteAheadLog.Line
 		line.Crc = chcks
 		line.Value = value
 		line.Timestamp = uint64(fulltimestamp)
@@ -136,7 +136,7 @@ func (s *SkipList) InsertNode(key string,value []byte,ts int) {
 		tombstone := byte(ts)
 		keysize := uint64(len(key))
 		valuesize := uint64(len(value))
-		var line WriteAheadLog.Line;
+		var line WriteAheadLog.Line
 		line.Crc = chcks
 		line.Value = value
 		line.Timestamp = uint64(fulltimestamp)

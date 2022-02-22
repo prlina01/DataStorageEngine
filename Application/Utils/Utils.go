@@ -7,7 +7,7 @@ import (
 
 func Find(pattern string) []string {
 	files, _ := ioutil.ReadDir("Data")
-	neededFiles := []string{}
+	var neededFiles []string
 	for _, f := range files {
 		str := f.Name()
 		reg, _ := regexp.MatchString(pattern, str)

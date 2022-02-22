@@ -6,23 +6,22 @@ import (
 )
 
 func main() {
-	DSE := DataStorageEngine.DataStorageEngine{}
-	DSE.Init()
+	DSE := DataStorageEngine.DataStorageEngine{}.Init()
 
 	fmt.Println(DSE.GET("kohahnj8gggdcb"))
-	DSE.SET("as8gggd",make([]byte,15))
-	DSE.SET("koffnj8gggdz",make([]byte,15))
-	DSE.SET("koggasdgnj8gggdsz",make([]byte,15))
-	DSE.SET("konhhahcj8gggdsg",make([]byte,15))
-	DSE.SET("kobxcbnj8gggdb",make([]byte,15))
-	DSE.SET("kohahnj8gggdcb",make([]byte,15))
-	DSE.SET("konvcnnj8gggdxn",make([]byte,15))
-	DSE.SET("kahdfhadfonj8gggdnbmcx",make([]byte,15))
-	DSE.SET("konxcvnnj8gggdxmm",make([]byte,15))
-	DSE.SET("koadfhnj8gggdmx",make([]byte,15))
-	DSE.SET("koxcvnxcvnnj8gggdxcbm",make([]byte,15))
-
-	fmt.Println(DSE.GET("kohahnj8gggdcb"))
+	fmt.Println(DSE.GET("koggasdgnj8gggdszv"))
+	DSE.SET("as8gggdb",make([]byte,15))
+	DSE.SET("koffnj8gggdzzgg",make([]byte,15))
+	DSE.GET("koffnj8gggdzz")
+	DSE.SET("koggasdgnj8gggdszv",make([]byte,15))
+	DSE.SET("konhhahcj8gggdsgg",make([]byte,15))
+	DSE.SET("kobxcbnj8gggdbh",make([]byte,15))
+	DSE.SET("kohahnj8gggdcbs",make([]byte,15))
+	DSE.SET("konvcnnj8gggdxnf",make([]byte,15))
+	DSE.SET("kahdfhadfonj8gggdnbmcxh",make([]byte,15))
+	DSE.SET("konxcvnnj8gggdxmmj",make([]byte,15))
+	DSE.SET("koadfhnj8gggdmxy",make([]byte,15))
+	DSE.SET("koxcvnxcvnnj8gggdxcbmt",make([]byte,15))
 
 
 

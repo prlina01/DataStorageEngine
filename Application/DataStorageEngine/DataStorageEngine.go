@@ -5,6 +5,7 @@ import (
 	"KeyDataStorage/Application/Memtable"
 	"KeyDataStorage/Application/SkipList"
 	"KeyDataStorage/Application/Sstable"
+	"KeyDataStorage/Application/TokenBucket"
 	"KeyDataStorage/Application/WriteAheadLog"
 	"fmt"
 	"gopkg.in/yaml.v2"
@@ -22,19 +23,26 @@ type DataStorageEngine struct{
 	MaxLsmNodesOtherLevels int `yaml:"max_lsm_nodes_other_levels"`
 	FalsePRate   float64	`yaml:"false_positive_rate"`
 	HLLPrecision uint8	`yaml:"hll_precision"`
+	MaxTBSize int `yaml:"max_tokens"`
+	Interval int64 `yaml:"token_bucket_interval"`
 	cache *Cache.Cache
 	memtable *Memtable.MemTable
+	tokenbucket *TokenBucket.TokenBucket
 }
 
-func (DSE *DataStorageEngine) Init(){
+func (DSE DataStorageEngine) Init() DataStorageEngine{
 	configData, err := ioutil.ReadFile("config.yml")
 	if err != nil {
 		log.Fatal(err)
 	}
 	err = yaml.Unmarshal(configData, &DSE)
+	var newdse DataStorageEngine
 	if err != nil {
-		DSE = &DataStorageEngine{10,10,1,5,4,4,2,0.005,4,nil,nil}
+		newdse = DataStorageEngine{10,10,1,5,4,4,2,0.005,4,1000,10,nil,nil,nil}
+		DSE = newdse
 	}
+	tokenbucket := TokenBucket.TokenBucket{}
+	tokenbucket.Init(DSE.MaxTBSize, int(DSE.Interval))
 
 	cache := Cache.Cache{MaxSize: DSE.CacheSize}
 	cache.Init()
@@ -42,14 +50,24 @@ func (DSE *DataStorageEngine) Init(){
 	wal.Init(int64(DSE.WalSize))
 	wal.LWM = int(DSE.LowWaterMark)
 
-	mt := Memtable.MemTable{DSE.MemtableSize, SkipList.New(20, 0, 0, nil), &wal,DSE.FalsePRate,DSE.HLLPrecision}
+	mt := Memtable.MemTable{
+		Size: 					DSE.MemtableSize,
+		Data:                   SkipList.New(20, 0, 0, nil),
+		Wal:                    &wal,
+		MaxLsmTreeLevel:        DSE.MaxLsmTreeLevel,
+		MaxLsmNodesFirstLevel:  DSE.MaxLsmNodesFirstLevel,
+		MaxLsmNodesOtherLevels: DSE.MaxLsmNodesOtherLevels,
+		FalsePRate:             DSE.FalsePRate,
+		HLLPrecision:           DSE.HLLPrecision}
 	mt.Init()
 
 	DSE.memtable = &mt
 	DSE.cache = &cache
+	DSE.tokenbucket = &tokenbucket
+	return DSE
 }
 
-func (DSE *DataStorageEngine) GET(key string) []byte{
+func (DSE *DataStorageEngine) get_without_cache(key string) []byte{
 	step1 := DSE.memtable.Data.FindElement(key)
 	if step1 == nil {
 		step2:= DSE.cache.FindKey(key)
@@ -58,25 +76,37 @@ func (DSE *DataStorageEngine) GET(key string) []byte{
 			if step3 == nil{
 				return nil
 			} else{
-				DSE.cache.AddKV(key,step3)
 				return step3
 			}
 		}else{
 			var k Cache.Data
 			k = step2.Value.(Cache.Data)
-			DSE.cache.AddKV(key,k.Value)
 			return k.Value
 		}
 	}else{
-		DSE.cache.AddKV(key,step1.Line.Value)
 		return step1.Line.Value
 	}
 }
+func (DSE *DataStorageEngine) GET(key string) []byte{
+	ret:= DSE.get_without_cache(key)
+	if ret != nil{
+		DSE.cache.AddKV(key,ret)
+		return ret
+	}
+	return nil
+
+
+
+
+}
 func (DSE *DataStorageEngine) SET(key string,value []byte){
+	if !DSE.tokenbucket.UpdateTB(){
+		fmt.Println("Premasili ste broj tokena u toku vremena")
+	}
 	DSE.memtable.Insert(key,value)
 }
 func (DSE *DataStorageEngine) DELETE(key string){
-	pair := DSE.GET(key)
+	pair := DSE.get_without_cache(key)
 	if pair != nil{
 		DSE.memtable.Delete(key,pair)
 		fmt.Print("Deleted ")
