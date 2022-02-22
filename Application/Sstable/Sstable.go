@@ -117,7 +117,16 @@ func FindKey(searchKey string) []byte {
 			}
 			if err!= nil {panic("Can't read from file!")}
 			if dataLine.Key == searchKey {
-				return dataLine.Value
+				mybytes := []byte(dataLine.Key)
+				for i := 0; i < len(dataLine.Value); i++ {
+					mybytes = append(mybytes, dataLine.Value[i])
+				}
+				if(dataLine.Crc == WriteAheadLog.CRC32(mybytes)){
+					return dataLine.Value
+				}else {
+					panic("Checksum error!")
+					return nil
+				}
 			}
 		}
 	}
