@@ -1,70 +1,78 @@
 package main
 
 import (
-	"KeyDataStorage/Application/Cache"
-	"KeyDataStorage/Application/Memtable"
-	"KeyDataStorage/Application/SkipList"
-	"KeyDataStorage/Application/WriteAheadLog"
+	"KeyDataStorage/Application/DataStorageEngine"
 	"fmt"
-	yaml "gopkg.in/yaml.v2"
-	"io/ioutil"
-	"log"
 )
 
-type Config struct {
-	WalSize      uint64 `yaml:"wal_size"`
-	MemtableSize uint64 `yaml:"memtable_size"`
-	LowWaterMark uint8  `yaml:"low_water_mark"`
-	CacheSize    int    `yaml:"cache_size"`
-}
-
 func main() {
-	var config Config
-	configData, err := ioutil.ReadFile("config.yml")
-	if err != nil {
-		log.Fatal(err)
-	}
-	yaml.Unmarshal(configData, &config)
-	fmt.Println(config.WalSize)
-	marshalled, err := yaml.Marshal(config)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(string(marshalled))
-	var keys []string
-	keys = append(keys, "dog")
-	keys = append(keys, "man")
-	keys = append(keys, "ggss")
-	keys = append(keys, "xv")
-	keys = append(keys, "zxv")
-	keys = append(keys, "gd")
-	keys = append(keys, "dg")
-	keys = append(keys, "gasdg")
-	keys = append(keys, "daszx")
-	keys = append(keys, "daszx1")
+	DSE := DataStorageEngine.DataStorageEngine{}.Init()
 
-	values := make([][]byte, 10)
-	for i := range values {
-		values[i] = make([]byte, 10)
+	for{
+		fmt.Println("1 - PUT")
+		fmt.Println("2 - GET")
+		fmt.Println("3 - DELETE")
+		fmt.Println("4 - PUTHLL")
+		fmt.Println("5 - PUTCMS")
+		fmt.Println("6 - Exit")
+		var answer string
+		var key string
+		_, _ = fmt.Scanln(&answer)
+		if answer == "1"{
+			var value string
+			fmt.Print("Unesite kljuc:")
+			_, _ = fmt.Scanln(&key)
+			fmt.Print("Unesite value:")
+			_, _ = fmt.Scanln(&value)
+			DSE.SET(key,[]byte(value))
+			continue
+		}else if answer == "2"{
+			fmt.Print("Unesite kljuc, -hll ili -cms za te strukture:")
+			_, _ = fmt.Scanln(&key)
+			value := DSE.GET(key)
+			if value == nil{
+				fmt.Println("No such key")
+			}else {
+				fmt.Println(value)
+			}
+			continue
+		}else if answer == "3"{
+			fmt.Print("Unesite kljuc:")
+			_, _ = fmt.Scanln(&key)
+			DSE.DELETE(key)
+		}else if answer == "4"{
+			fmt.Print("Unesite kljuc:")
+			_, _ = fmt.Scanln(&key)
+			var keyhll string
+			keyhll = key+"-hll"
+			var data []string
+			var element string
+			fmt.Print("Unesite podatke za hll,x za kraj:")
+			for{
+				_,_ = fmt.Scanln(&element)
+				if element == "x"{
+					break
+				}
+				data = append(data,element)
+			}
+			if len(data) == 0 {
+				continue
+			}
+			DSE.PUTHLL(keyhll,data)
+			continue
+		}else if answer == "5"{
+			continue
+
+		}else if answer == "6"{
+			break
+		}else{
+			fmt.Println("Greska! Pogresan unos")
+			continue
+		}
+
 	}
 
-	cache := Cache.Cache{MaxSize: config.CacheSize}
-	cache.Init()
-	wal := WriteAheadLog.WriteAheadLog{}
-	wal.Init(int64(config.WalSize))
-	wal.LWM = int(config.LowWaterMark)
 
-	mt := Memtable.MemTable{config.MemtableSize, SkipList.New(20, 0, 0, nil), &wal}
-	mt.Init()
 
-	for i := range keys {
-		cache.AddKV(keys[i], values[i])
-		mt.Insert(keys[i], values[i])
-	}
-	fmt.Println(cache.FindKey("xv"))
-	fmt.Println(cache.FindKey("sdds"))
-	cache.RemoveKey("gasdg")
-	fmt.Println(cache.FindKey("sdds"))
-	cache.PrintAll()
 
 }
