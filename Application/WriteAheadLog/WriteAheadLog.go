@@ -93,7 +93,7 @@ func SerializeLine(line Line) []byte {
 	fulltimestampbytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(fulltimestampbytes, fulltimestamp)
 
-	tombstone := byte(0)
+	tombstone := byte(int(line.Tombstone))
 
 	keysize := uint64(len(line.Key))
 	keysizebytes := make([]byte, 8)
@@ -180,8 +180,7 @@ func (wal *WriteAheadLog) readSegment(segment int) []Line {
 	}
 	var data []Line
 	for i := 1; int64(i) <= wal.segment; i++ {
-		// TODO MENJANNO OVO AKO JE GRESKA POGLEDAJ KOD DONJE CRTE
-		parseLine, _ := ParseLine(f)
+		parseLine, err := ParseLine(f)
 		data = append(data, parseLine)
 		if errors.Is(err, io.EOF) {
 			return data
@@ -233,7 +232,7 @@ func (wal *WriteAheadLog) LowWaterMarkRemoval() {
 	}
 }
 
-func (wal *WriteAheadLog) AddKV(key string, value []byte) bool {
+func (wal *WriteAheadLog) AddKV(key string, value []byte, ) bool {
 	if int64(len(wal.Data)) >= wal.segment {
 		i := wal.segLoc[len(wal.segLoc)-1] + 1
 		wal.segLoc = append(wal.segLoc, i)

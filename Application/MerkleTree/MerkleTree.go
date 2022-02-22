@@ -97,6 +97,3 @@ func writeNode(node *Node, level int, file *os.File) {
 }
 
 
-func main(){
-	fmt.Println()
-}

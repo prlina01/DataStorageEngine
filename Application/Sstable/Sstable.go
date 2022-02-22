@@ -2,6 +2,7 @@ package Sstable
 
 import (
 	"KeyDataStorage/Application/BloomFilter"
+	"KeyDataStorage/Application/HyperLogLog"
 	"KeyDataStorage/Application/MerkleTree"
 	"KeyDataStorage/Application/Utils"
 	"KeyDataStorage/Application/WriteAheadLog"
@@ -20,6 +21,8 @@ import (
 )
 
 type LsmTreeConfig struct {
+	FalsePRate   float64	`yaml:"false_positive_rate"`
+	HLLPrecision uint8	`yaml:"hll_precision"`
 	MaxLsmTreeLevel int `yaml:"max_lsm_tree_level"`
 	MaxLsmNodesFirstLevel int `yaml:"max_lsm_nodes_first_level"`
 	MaxLsmNodesOtherLevels int `yaml:"max_lsm_nodes_other_levels"`
@@ -38,14 +41,17 @@ type Location struct {
 }
 
 type Sstable struct {
-	Summary     Summary
-	Index       []Location
-	Data        []WriteAheadLog.Line
-	BloomFilter BloomFilter.BloomFilter
-	Identifier string
+	Summary      Summary
+	Index        []Location
+	Data         []WriteAheadLog.Line
+	BloomFilter  BloomFilter.BloomFilter
+	HLL		     HyperLogLog.HLL
+	FalsePRate   float64
+	HLLPrecision uint8
+	Identifier   string
 }
 
-func FindKey(searchKey string) bool {
+func FindKey(searchKey string) []byte {
 	sstables := GetKeyDataStructure()
 	keys := make([]int, 0)
 	for k, _ := range sstables {
@@ -57,6 +63,7 @@ func FindKey(searchKey string) bool {
 		for _, sstable := range sstables[uint32(k)] {
 
 			f_bloomFilter, err := os.Open("Data/" + sstable["BloomFilter"])
+			if err!= nil {panic("can't open file!")}
 			if err!= nil {panic("can't open file!")}
 			bloomFilter := ParseBloom(f_bloomFilter)
 			if !bloomFilter.IsElementInBloomFilter(searchKey) {
@@ -91,14 +98,11 @@ func FindKey(searchKey string) bool {
 			dataLine, err := WriteAheadLog.ParseLine(f_data)
 			if err!= nil {panic("Can't read from file!")}
 			if dataLine.Key == searchKey {
-				fmt.Print("Key has been found, It's value is ")
-				fmt.Println(dataLine.Value)
-				return true
+				return dataLine.Value
 			}
 		}
 	}
-
-	return false
+	return nil
 }
 
 func GetKeyDataStructure() map[uint32][]map[string]string {
@@ -136,6 +140,8 @@ func GetKeyDataStructure() map[uint32][]map[string]string {
 				connectedFilesMap["Index"] = connectedFile
 			} else 	if strings.Contains(connectedFile, "Summary") {
 				connectedFilesMap["Summary"] = connectedFile
+			}else if strings.Contains(connectedFile, "HyperLogLog") {
+				connectedFilesMap["HyperLogLog"] = connectedFile
 			}
 		}
 		sstables[uint32(identifier_mul)] = append(sstables[uint32(identifier_mul)], connectedFilesMap)
@@ -268,7 +274,7 @@ func Compaction() {
 				DeleteSSTableAndConnectedParts(f1.Name())
 				DeleteSSTableAndConnectedParts(f2.Name())
 
-				sst = Sstable{}
+				sst = Sstable{FalsePRate: config.FalsePRate, HLLPrecision:config.HLLPrecision}
 				sst.Init(lines, level)
 				lines = []WriteAheadLog.Line{}
 
@@ -332,7 +338,7 @@ func Compaction() {
 				DeleteSSTableAndConnectedParts(f1.Name())
 				DeleteSSTableAndConnectedParts(f2.Name())
 
-				sst = Sstable{}
+				sst = Sstable{FalsePRate: config.FalsePRate, HLLPrecision:config.HLLPrecision}
 				sst.Init(lines, level)
 				lines = []WriteAheadLog.Line{}
 
@@ -340,7 +346,7 @@ func Compaction() {
 		}
 
 
-		new_level_sst := Sstable{}
+		new_level_sst := Sstable{FalsePRate: config.FalsePRate, HLLPrecision:config.HLLPrecision}
 
 		DeleteSSTableAndConnectedParts(sst.Identifier)
 		new_level_sst.Init(sst.Data, level + 1)
@@ -543,12 +549,14 @@ func (sst *Sstable) findPath() {
 func (sst *Sstable) Init(data []WriteAheadLog.Line, lsmLevel int) {
 	sst.Data = data
 	sst.BloomFilter = BloomFilter.BloomFilter{}
-	sst.BloomFilter.M = BloomFilter.CalculateM(len(data), 0.005)
+	sst.BloomFilter.M = BloomFilter.CalculateM(len(data), sst.FalsePRate)
 	sst.BloomFilter.K = BloomFilter.CalculateK(len(data), sst.BloomFilter.M)
 	sst.BloomFilter.HashFunctions, sst.BloomFilter.HashFunctionsConfig = BloomFilter.CreateHashFunctions(sst.BloomFilter.K)
 	sst.BloomFilter.CreateBitSet()
+	sst.HLL.Create_array(sst.HLLPrecision)
 	for line := range data {
 		sst.BloomFilter.AddElement(data[line].Key)
+		sst.HLL.Add_element(data[line].Key)
 	}
 	f, err := os.Open("Data")
 	if err != nil {
@@ -615,6 +623,7 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	filename3 := "Data/"+ strconv.Itoa(lsmLevel) + "-BloomFilter-" + pad + ".db"
 	filename4 := "Data/"+ strconv.Itoa(lsmLevel) + "-Metadata-" + pad + ".txt"
 	filename5 := "Data/"+ strconv.Itoa(lsmLevel) + "-TOC-" + pad + ".db"
+	filename6 := "Data/"+ strconv.Itoa(lsmLevel) + "-HyperLogLog-" + pad + ".db"
 
 	f1, _ := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
 	f2, _ := os.OpenFile(filename1, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
@@ -622,6 +631,7 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	f4, _ := os.OpenFile(filename3, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
 	f5, _ := os.OpenFile(filename4, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
 	f6, _ := os.OpenFile(filename5, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
+	f7, _ := os.OpenFile(filename6, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0777)
 	err := f1.Close()
 	if err != nil {
 		return 
@@ -646,15 +656,21 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	if err != nil {
 		return 
 	}
+	err = f7.Close()
+	if err != nil {
+		return
+	}
 	var stringss []string
 	stringss = append(stringss,strings.Split(filename,"Data/")[1]+"\n")
 	stringss = append(stringss,strings.Split(filename1,"Data/")[1]+"\n")
 	stringss = append(stringss,strings.Split(filename2,"Data/")[1]+"\n")
 	stringss = append(stringss,strings.Split(filename3,"Data/")[1]+"\n")
 	stringss = append(stringss,strings.Split(filename4,"Data/")[1]+"\n")
-	stringss = append(stringss,strings.Split(filename5,"Data/")[1])
+	stringss = append(stringss,strings.Split(filename5,"Data/")[1]+"\n")
+	stringss = append(stringss,strings.Split(filename6,"Data/")[1])
 	var bloombytes []byte
-	var sstablebytes []byte
+	var hllbytes []byte
+ 	var sstablebytes []byte
 	var indexbytes []byte
 	var summarybytes []byte
 	var firstlast []byte
@@ -663,6 +679,7 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	var first Location
 	var last Location
 	bloombytes = serializeBloom(sst.BloomFilter)
+	hllbytes = sst.HLL.Serialize()
 	for line := range sst.Data {
 		dline := sst.Data[line]
 		currentks := dline.Keysize
@@ -691,6 +708,7 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	file2, _ := os.OpenFile(filename2, os.O_APPEND | os.O_WRONLY, 0777)
 	file3, _ := os.OpenFile(filename3, os.O_APPEND | os.O_WRONLY, 0777)
 	file5, _ := os.OpenFile(filename5, os.O_APPEND | os.O_WRONLY, 0777)
+	file6, _ := os.OpenFile(filename6, os.O_APPEND | os.O_WRONLY, 0777)
 	_, err = file.Write(sstablebytes)
 	if err != nil {
 		return
@@ -704,6 +722,10 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 		return
 	}
 	_, err = file3.Write(bloombytes)
+	if err != nil {
+		return
+	}
+	_, err = file6.Write(hllbytes)
 	if err != nil {
 		return
 	}
@@ -735,6 +757,10 @@ func (sst *Sstable) WriteData(segment int, lsmLevel int) {
 	err = file5.Close()
 	if err != nil {
 		return 
+	}
+	err = file6.Close()
+	if err != nil {
+		return
 	}
 
 

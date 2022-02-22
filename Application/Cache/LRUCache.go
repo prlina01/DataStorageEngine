@@ -12,8 +12,8 @@ type Cache struct{
 }
 
 type Data struct{
-	key string
-	value []byte
+	key   string
+	Value []byte
 }
 
 func (c *Cache) Init(){
@@ -37,7 +37,7 @@ func(c *Cache) PrintAll(){
 	for e := c.LRUlist.Front(); e != nil; e = e.Next() {
 		var k Data
 		k = e.Value.(Data)
-		fmt.Println(i,k.key,k.value)
+		fmt.Println(i,k.key,k.Value)
 		i++
 	}
 	fmt.Println("mapa:")
