@@ -2,6 +2,7 @@ package DataStorageEngine
 
 import (
 	"KeyDataStorage/Application/Cache"
+	"KeyDataStorage/Application/CountMinSketch"
 	"KeyDataStorage/Application/HyperLogLog"
 	"KeyDataStorage/Application/Memtable"
 	"KeyDataStorage/Application/SkipList"
@@ -26,6 +27,8 @@ type DataStorageEngine struct{
 	HLLPrecision uint8	`yaml:"hll_precision"`
 	MaxTBSize int `yaml:"max_tokens"`
 	Interval int64 `yaml:"token_bucket_interval"`
+	CMSDelta float64	`yaml:"cms_delta"`
+	CMSEpsilon float64	`yaml:"cms_epsilon"`
 	cache *Cache.Cache
 	memtable *Memtable.MemTable
 	tokenbucket *TokenBucket.TokenBucket
@@ -37,10 +40,66 @@ func (DSE DataStorageEngine) Init() DataStorageEngine{
 		log.Fatal(err)
 	}
 	err = yaml.Unmarshal(configData, &DSE)
+	if DSE.WalSize <= 0{
+		DSE.WalSize = 10
+	}
+	if DSE.MemtableSize <= 0{
+		DSE.MemtableSize = 10
+	}
+	if DSE.LowWaterMark <= 0{
+		DSE.LowWaterMark = 1
+	}
+	if DSE.CacheSize <= 0{
+		DSE.CacheSize = 5
+	}
+	if DSE.MaxLsmTreeLevel <= 0{
+		DSE.MaxLsmTreeLevel = 4
+	}
+	if DSE.MaxLsmNodesFirstLevel <= 0{
+		DSE.MaxLsmNodesFirstLevel = 4
+	}
+	if DSE.MaxLsmNodesOtherLevels <= 0{
+		DSE.MaxLsmNodesOtherLevels = 2
+	}
+	if DSE.FalsePRate <= 0{
+		DSE.FalsePRate = 0.05
+	}
+	if DSE.MaxTBSize <= 0{
+		DSE.MaxTBSize = 10
+	}
+	if DSE.Interval <= 0{
+		DSE.Interval = 15
+	}
+	if DSE.CMSDelta <= 0{
+		DSE.CMSDelta = 0.01
+	}
+	if DSE.CMSEpsilon <= 0{
+		DSE.CMSEpsilon = 0.01
+	}
+
 	var newdse DataStorageEngine
 	if err != nil {
-		newdse = DataStorageEngine{10,10,1,5,4,4,2,0.005,4,1000,10,nil,nil,nil}
+		newdse = DataStorageEngine{
+			WalSize: 				10,
+			MemtableSize:           10,
+			LowWaterMark:           1,
+			CacheSize:              5,
+			MaxLsmTreeLevel:        4,
+			MaxLsmNodesFirstLevel:  4,
+			MaxLsmNodesOtherLevels: 2,
+			FalsePRate:             0.005,
+			HLLPrecision:           4,
+			MaxTBSize:              1000,
+			Interval:               10,
+			CMSDelta:               0.01,
+			CMSEpsilon:             0.01}
 		DSE = newdse
+	}
+	if DSE.CMSEpsilon < 0.001 || DSE.CMSEpsilon > 0.1{
+		DSE.CMSEpsilon = 0.01
+	}
+	if DSE.CMSDelta < 0.001 || DSE.CMSDelta > 0.1{
+		DSE.CMSDelta = 0.01
 	}
 	if DSE.HLLPrecision < 4 || DSE.HLLPrecision > 16{
 		DSE.HLLPrecision = 4
@@ -109,6 +168,7 @@ func (DSE *DataStorageEngine) GET(key string) []byte{
 func (DSE *DataStorageEngine) SET(key string,value []byte){
 	if !DSE.tokenbucket.UpdateTB(){
 		fmt.Println("Premasili ste broj tokena u toku vremena")
+		return
 	}
 	DSE.memtable.Insert(key,value)
 }
@@ -140,6 +200,30 @@ func (DSE DataStorageEngine) PUTHLL(keyhll string,data []string) {
 		}
 		bytes = HLL.Serialize()
 		DSE.SET(keyhll,bytes)
+	}
+
+}
+
+func (DSE DataStorageEngine) PUTCMS(keycms string,data []string) {
+	hllbytes := DSE.GET(keycms)
+	var CMS CountMinSketch.CountMinSketch
+	var bytes []byte
+	if hllbytes == nil{
+		CMS = CountMinSketch.CountMinSketch{}
+		CMS.IntializeCMS(DSE.CMSDelta,DSE.CMSEpsilon)
+		CMS.HashFunctions, _ = CountMinSketch.CreateHashFunctions(CMS.K)
+		for line := range data {
+			CMS.AddElement(data[line])
+		}
+		bytes = CMS.Serialize()
+		DSE.SET(keycms,bytes)
+	}else{
+		CMS = CountMinSketch.ParseCMS(hllbytes)
+		for line := range data {
+			CMS.AddElement(data[line])
+		}
+		bytes = CMS.Serialize()
+		DSE.SET(keycms,bytes)
 	}
 
 }

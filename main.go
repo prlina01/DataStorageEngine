@@ -7,7 +7,7 @@ import (
 
 func main() {
 	DSE := DataStorageEngine.DataStorageEngine{}.Init()
-
+	fmt.Println("********* DATA STORAGE ENGINE *********")
 	for{
 		fmt.Println("1 - PUT")
 		fmt.Println("2 - GET")
@@ -15,6 +15,7 @@ func main() {
 		fmt.Println("4 - PUTHLL")
 		fmt.Println("5 - PUTCMS")
 		fmt.Println("6 - Exit")
+		fmt.Print("Unesite jednu od ponudjenih opcija: ")
 		var answer string
 		var key string
 		_, _ = fmt.Scanln(&answer)
@@ -61,9 +62,28 @@ func main() {
 			DSE.PUTHLL(keyhll,data)
 			continue
 		}else if answer == "5"{
+			fmt.Print("Unesite kljuc:")
+			_, _ = fmt.Scanln(&key)
+			var keyhll string
+			keyhll = key+"-cms"
+			var data []string
+			var element string
+			fmt.Print("Unesite podatke za cms,x za kraj:")
+			for{
+				_,_ = fmt.Scanln(&element)
+				if element == "x"{
+					break
+				}
+				data = append(data,element)
+			}
+			if len(data) == 0 {
+				continue
+			}
+			DSE.PUTCMS(keyhll,data)
 			continue
 
 		}else if answer == "6"{
+			fmt.Println("10+ :D")
 			break
 		}else{
 			fmt.Println("Greska! Pogresan unos")
