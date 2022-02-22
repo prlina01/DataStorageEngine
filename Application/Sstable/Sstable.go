@@ -70,7 +70,7 @@ func FindKey(searchKey string) []byte {
 				return nil
 			}
 			if err!= nil {panic("Can't open file!")}
-			indexOffsetNeeded := 0
+			indexOffsetNeeded := -1
 			summary := ParseSummary(fSummary)
 			err = fSummary.Close()
 			if err != nil {
@@ -82,7 +82,7 @@ func FindKey(searchKey string) []byte {
 						indexOffsetNeeded = summaryLine.value
 					}
 				}
-				if indexOffsetNeeded == 0 { continue }
+				if indexOffsetNeeded == -1 { continue }
 			} else { continue }
 
 			fIndex, err := os.Open("Data/" + sstable["Index"])

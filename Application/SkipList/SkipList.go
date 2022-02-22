@@ -158,7 +158,8 @@ func (s *SkipList) DeleteNode(key string,value []byte) {
 		update[i] = x
 	}
 	x = x.Next[0]
-	if x == s.FindElement(key) {
+	elem := s.FindElement(key)
+	if x == elem && x!=nil {
 		x.Line.Tombstone = 1
 	}else{
 		s.InsertNode(key,value,1)}
