@@ -2,6 +2,7 @@ package DataStorageEngine
 
 import (
 	"KeyDataStorage/Application/Cache"
+	"KeyDataStorage/Application/HyperLogLog"
 	"KeyDataStorage/Application/Memtable"
 	"KeyDataStorage/Application/SkipList"
 	"KeyDataStorage/Application/Sstable"
@@ -40,6 +41,9 @@ func (DSE DataStorageEngine) Init() DataStorageEngine{
 	if err != nil {
 		newdse = DataStorageEngine{10,10,1,5,4,4,2,0.005,4,1000,10,nil,nil,nil}
 		DSE = newdse
+	}
+	if DSE.HLLPrecision < 4 || DSE.HLLPrecision > 16{
+		DSE.HLLPrecision = 4
 	}
 	tokenbucket := TokenBucket.TokenBucket{}
 	tokenbucket.Init(DSE.MaxTBSize, int(DSE.Interval))
@@ -84,6 +88,9 @@ func (DSE *DataStorageEngine) get_without_cache(key string) []byte{
 			return k.Value
 		}
 	}else{
+		if step1.Line.Tombstone == 1{
+			return nil
+		}
 		return step1.Line.Value
 	}
 }
@@ -113,3 +120,28 @@ func (DSE *DataStorageEngine) DELETE(key string){
 		fmt.Println(key)
 	}
 }
+
+func (DSE DataStorageEngine) PUTHLL(keyhll string,data []string) {
+	hllbytes := DSE.GET(keyhll)
+	var HLL HyperLogLog.HLL
+	var bytes []byte
+	if hllbytes == nil{
+		HLL = HyperLogLog.HLL{}
+		HLL.Create_array(DSE.HLLPrecision)
+		for line := range data {
+			HLL.Add_element(data[line])
+		}
+		bytes = HLL.Serialize()
+		DSE.SET(keyhll,bytes)
+	}else{
+		HLL = HyperLogLog.ParseHLL(hllbytes)
+		for line := range data {
+			HLL.Add_element(data[line])
+		}
+		bytes = HLL.Serialize()
+		DSE.SET(keyhll,bytes)
+	}
+
+}
+
+

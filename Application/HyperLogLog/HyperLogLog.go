@@ -3,11 +3,8 @@ package HyperLogLog
 import (
 	"encoding/binary"
 	"hash/fnv"
-	"io"
 	"math"
 	"math/bits"
-	"os"
-
 	//"crypto/md5"
 )
 
@@ -98,23 +95,27 @@ func (hll *HLL) Serialize() []byte{
 	return allbytes
 }
 
-func ParseHLL(f *os.File) HLL {
+func ParseHLL(allbytes []byte) HLL {
 	hll := HLL{};
 	var bit_set []uint8
-	mbytes := make([]byte, 8)
-	_, _ = f.Read(mbytes)
+	var i int
+	i = 0
+	mbytes := allbytes[i:8]
+	i+=8
 	hll.m = binary.LittleEndian.Uint64(mbytes)
-	kbytes := make([]byte, 4)
-	_, _ = f.Read(kbytes)
+	kbytes := allbytes[i:12]
+	i = 12
 	hll.p = uint8(binary.LittleEndian.Uint32(kbytes))
+	var z int
+	z = len(allbytes)
 	for {
-		element_of_bit_set := make([]byte, 4)
-		_, err := f.Read(element_of_bit_set)
-		if err == io.EOF {
+		if i == z {
 			break
 		}
-		int_element_of_bit_set := binary.LittleEndian.Uint32(element_of_bit_set)
-		bit_set = append(bit_set, uint8(int_element_of_bit_set))
+		elementOfBitSet := allbytes[i:i+4]
+		intElementOfBitSet := binary.LittleEndian.Uint32(elementOfBitSet)
+		bit_set = append(bit_set, uint8(intElementOfBitSet))
+		i += 4
 	}
 
 	hll.reg = bit_set

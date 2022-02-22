@@ -28,7 +28,7 @@ func (memtable *MemTable) Init() {
 	}
 }
 func (memtable *MemTable) Insert(key string, value []byte) {
-	if !memtable.Wal.AddKV(key, value) {
+	if !memtable.Wal.AddKV(key, value,0) {
 		panic("Not written into wal! error!")
 		return
 	}
@@ -64,6 +64,10 @@ func (memtable *MemTable) Flush() {
 }
 
 func (memtable *MemTable) Delete(key string,value []byte) {
+	if !memtable.Wal.AddKV(key, value,1) {
+		panic("Not written into wal! error!")
+		return
+	}
 	memtable.Data.DeleteNode(key,value)
 
 }

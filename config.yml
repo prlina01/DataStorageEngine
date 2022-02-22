@@ -1,5 +1,5 @@
 wal_size: 10
-memtable_size: 10
+memtable_size: 3
 low_water_mark: 1
 cache_size: 5
 max_lsm_tree_level: 4

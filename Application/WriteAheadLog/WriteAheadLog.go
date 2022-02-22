@@ -232,7 +232,7 @@ func (wal *WriteAheadLog) LowWaterMarkRemoval() {
 	}
 }
 
-func (wal *WriteAheadLog) AddKV(key string, value []byte, ) bool {
+func (wal *WriteAheadLog) AddKV(key string, value []byte,tomb int) bool {
 	if int64(len(wal.Data)) >= wal.segment {
 		i := wal.segLoc[len(wal.segLoc)-1] + 1
 		wal.segLoc = append(wal.segLoc, i)
@@ -267,7 +267,7 @@ func (wal *WriteAheadLog) AddKV(key string, value []byte, ) bool {
 	fulltimestampbytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(fulltimestampbytes, uint64(fulltimestamp))
 
-	tombstone := byte(0)
+	tombstone := byte(tomb)
 
 	keysize := uint64(len(key))
 	keysizebytes := make([]byte, 8)
