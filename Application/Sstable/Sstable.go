@@ -63,17 +63,26 @@ func FindKey(searchKey string) []byte {
 		for _, sstable := range sstables[uint32(k)] {
 
 			f_bloomFilter, err := os.Open("Data/" + sstable["BloomFilter"])
-			if err!= nil {panic("can't open file!")}
-			if err!= nil {panic("can't open file!")}
 			bloomFilter := ParseBloom(f_bloomFilter)
 			if !bloomFilter.IsElementInBloomFilter(searchKey) {
 				continue
 			}
+			err = f_bloomFilter.Close()
+			if err != nil {
+				return nil
+			}
 
 			f_summary, err := os.Open("Data/" + sstable["Summary"])
+			if err != nil {
+				return nil
+			}
 			if err!= nil {panic("Can't open file!")}
 			indexOffsetNeeded := 0
 			summary := ParseSummary(f_summary)
+			err = f_summary.Close()
+			if err != nil {
+				return nil
+			}
 			if searchKey >= summary.first.key && searchKey <= summary.last.key {
 				for _, summaryLine := range summary.index {
 					if summaryLine.key == searchKey {
@@ -88,6 +97,10 @@ func FindKey(searchKey string) []byte {
 			f_index.Seek(int64(indexOffsetNeeded),0)
 			//ParseIndex(f_index, searchKey)
 			indexLine := ParseIndexLine(f_index)
+			err = f_index.Close()
+			if err != nil {
+				return nil
+			}
 			dataOffsetNeeded := indexLine.value
 
 
@@ -96,6 +109,10 @@ func FindKey(searchKey string) []byte {
 			if err!= nil {panic("Can't open file!")}
 			f_data.Seek(int64(dataOffsetNeeded), 0)
 			dataLine, err := WriteAheadLog.ParseLine(f_data)
+			err = f_data.Close()
+			if err != nil {
+				return nil
+			}
 			if err!= nil {panic("Can't read from file!")}
 			if dataLine.Key == searchKey {
 				return dataLine.Value
